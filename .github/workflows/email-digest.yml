@@ -2,21 +2,35 @@ name: Email Digest
 
 on:
   push:
-    paths: ['daily/*.md']
+    paths:
+      - 'daily/*.md'
+      - '!daily/sample-digest.md'
     branches: [main]
 
 jobs:
   email:
     runs-on: ubuntu-latest
+    # Only run if Resend is configured
+    if: ${{ vars.EMAIL_ENABLED != 'false' }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
+      - name: Check secrets
+        id: check
+        run: |
+          if [ -z "${{ secrets.RESEND_API_KEY }}" ] || [ -z "${{ secrets.EMAIL_TO }}" ]; then
+            echo "Skipping: RESEND_API_KEY or EMAIL_TO not configured."
+            echo "See README for setup instructions."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Find new digest
+        if: steps.check.outputs.skip != 'true'
         id: digest
         run: |
-          FILE=$(git diff --name-only HEAD~1 HEAD -- 'daily/*.md' | head -1)
+          FILE=$(git diff --name-only HEAD~1 HEAD -- 'daily/*.md' | grep -v sample | head -1)
           if [ -z "$FILE" ]; then
             echo "No new digest found"
             exit 0
@@ -26,12 +40,12 @@ jobs:
           echo "Found: $FILE"
 
       - uses: actions/setup-node@v4
-        if: steps.digest.outputs.file
+        if: steps.check.outputs.skip != 'true' && steps.digest.outputs.file
         with:
           node-version: 20
 
       - name: Install dependencies and send
-        if: steps.digest.outputs.file
+        if: steps.check.outputs.skip != 'true' && steps.digest.outputs.file
         run: |
           npm install marked@15
           node .github/scripts/send-digest.js "${{ steps.digest.outputs.file }}" "${{ steps.digest.outputs.date }}"
