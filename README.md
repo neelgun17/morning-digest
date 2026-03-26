@@ -40,7 +40,7 @@ Open `interests.md` and replace the examples with your own interests. The file h
 
 **Step 3** — Schedule the daily agent:
 
-Open Claude Code inside your private repo and paste this:
+Open Claude Code inside your private repo and copy-paste this (replace the repo URL with yours):
 
 ```
 Create a scheduled trigger called "morning-digest" that runs daily at 7am my time.
@@ -53,14 +53,34 @@ You are a daily learning digest generator.
 
 1. Read interests.md for the user's interest profile and priorities.
 2. Read feedback-log.md for recent feedback.
-3. Check the 3 most recent files in daily/ to avoid repeating topics. Rotate interests across the week.
-4. Use WebSearch to find 2-3 high-quality articles from reputable sources matching the interests. Prioritize written content. Total read time ~30 minutes.
-5. Use WebSearch to find 3-5 current news items across the user's news categories. Summarize each in 1-2 sentences with links.
+3. Check the 3 most recent files in daily/ — read them to see what was covered AND whether
+   their feedback tables are filled in.
+4. Detect missed days: if recent digests have empty feedback tables, the user didn't read them.
+
+If the user has been active (previous digest has feedback):
+  Generate a FULL digest:
+  - Learning Block (~30 min): 2-3 articles across their interests. Rotate topics.
+  - News Block (~10-15 min): 3-5 current news items across their news categories.
+
+If the user missed 1-2 days (empty feedback):
+  Generate a WELCOME BACK digest:
+  - News Catch-Up (priority): 5-7 items covering the most important news from missed days + today.
+  - One Learning Item (~10 min): single article from their top interest.
+  - Add a note at the top: "Welcome back — here's what you missed."
+
+If the user missed 3+ days:
+  Generate a CATCH-UP digest:
+  - News Only: 5-8 most significant stories from the missed period.
+  - No learning block. Note: "You've been away — here's a news catch-up. Learning resumes tomorrow."
+
+5. Use WebSearch to find content. Every link must be real and from a reputable source.
 6. Write the digest to daily/YYYY-MM-DD.md using today's date.
-7. Include a feedback table at the bottom for inline reactions.
+7. Include a feedback table at the bottom.
 8. Commit and push with message "Add daily digest for YYYY-MM-DD".
 
-Important: every link must be real and from a reputable source. Rotate across ALL interest areas throughout the week. Content should be accessible but substantive. Total: ~30 min learning + ~10-15 min news.
+Important: every link must be real and reputable. Rotate interests across the week.
+Content should be accessible but substantive. When catching up on news, prioritize
+significance — what moved markets, changed policy, or shifted the tech landscape.
 ```
 
 Claude Code will set up the schedule for you. Adjust the time to whenever you want your digest ready.
@@ -93,6 +113,22 @@ New interest to explore: woodworking
 Just type a few words. The agent reads this before generating the next digest. You can also update `interests.md` anytime — change priorities, add new topics, remove old ones.
 
 Over time, the system learns what you like.
+
+---
+
+## What Happens When You Miss a Day
+
+The agent detects whether you've been reading by checking if your feedback tables are filled in. It adapts automatically:
+
+| Scenario | What you get |
+|----------|-------------|
+| **Active** (yesterday's feedback filled in) | Full digest — 30 min learning + 15 min news |
+| **Missed 1-2 days** | Welcome-back digest — news catch-up from missed days is prioritized, plus one short learning item |
+| **Missed 3+ days** | Catch-up digest — news-only summary of the most significant stories from while you were away. Learning resumes the next day. |
+
+News goes stale, learning content doesn't — so when you've been away, the system prioritizes getting you current on what happened in the world before resuming your regular learning rotation.
+
+You don't need to do anything to trigger this. Just pull whenever you're ready and the digest will meet you where you are.
 
 ---
 
