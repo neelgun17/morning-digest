@@ -1,0 +1,6 @@
+name = "morning-digest-feedback"
+main = "index.js"
+compatibility_date = "2024-12-01"
+
+[vars]
+GITHUB_REPO = "YOUR_GITHUB_USERNAME/YOUR_REPO_NAME"

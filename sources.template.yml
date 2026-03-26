@@ -1,0 +1,42 @@
+# Content sources the agent checks alongside web search.
+# Add or remove feeds to match your interests.
+# Copy this to sources.yml and customize.
+
+rss:
+  # Tech & AI
+  - url: https://hnrss.org/best
+    name: Hacker News Best
+    category: tech
+  - url: https://feeds.arstechnica.com/arstechnica/index
+    name: Ars Technica
+    category: tech
+  - url: https://blog.anthropic.com/rss.xml
+    name: Anthropic Blog
+    category: ai
+  - url: https://openai.com/blog/rss.xml
+    name: OpenAI Blog
+    category: ai
+
+  # Finance & Economy
+  - url: https://feeds.bloomberg.com/markets/news.rss
+    name: Bloomberg Markets
+    category: finance
+
+  # World News
+  - url: https://rss.nytimes.com/services/xml/rss/nyt/World.xml
+    name: NYT World
+    category: news
+  - url: https://feeds.bbci.co.uk/news/world/rss.xml
+    name: BBC World
+    category: news
+
+  # Philosophy & Culture (add your own!)
+  - url: https://aeon.co/feed.rss
+    name: Aeon Essays
+    category: intellectual
+
+apis:
+  hackernews:
+    top: https://hacker-news.firebaseio.com/v0/topstories.json
+    item: https://hacker-news.firebaseio.com/v0/item/{id}.json
+    check_count: 30

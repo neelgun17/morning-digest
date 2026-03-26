@@ -1,0 +1,42 @@
+name: Email Digest
+
+on:
+  push:
+    paths: ['daily/*.md']
+    branches: [main]
+
+jobs:
+  email:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Find new digest
+        id: digest
+        run: |
+          FILE=$(git diff --name-only HEAD~1 HEAD -- 'daily/*.md' | head -1)
+          if [ -z "$FILE" ]; then
+            echo "No new digest found"
+            exit 0
+          fi
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "date=$(basename $FILE .md)" >> "$GITHUB_OUTPUT"
+          echo "Found: $FILE"
+
+      - uses: actions/setup-node@v4
+        if: steps.digest.outputs.file
+        with:
+          node-version: 20
+
+      - name: Install dependencies and send
+        if: steps.digest.outputs.file
+        run: |
+          npm install marked@15
+          node .github/scripts/send-digest.js "${{ steps.digest.outputs.file }}" "${{ steps.digest.outputs.date }}"
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          FEEDBACK_URL: ${{ secrets.FEEDBACK_URL }}

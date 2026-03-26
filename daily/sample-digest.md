@@ -55,7 +55,19 @@ Covers the core processes: carving (subtractive), modeling (additive), casting (
 
 ## Feedback
 
-*Edit inline — your responses shape tomorrow's digest:*
+*If you have email delivery set up, each section above gets one-click reaction buttons in your inbox:*
+
+| Button | What it tells the system |
+|--------|------------------------|
+| 👍 More like this | Topic, depth, and source all worked |
+| 🔬 Go deeper | Dedicate more time to this topic |
+| 📈 Too basic | Right topic, increase difficulty |
+| 📉 Too advanced | Right topic, simplify |
+| 👋 Not interested | Deprioritize this topic |
+
+*Plus a freeform text form for anything else.*
+
+*Without email, you can edit this section manually:*
 
 | Item | Reaction | Notes |
 |------|----------|-------|
@@ -63,11 +75,3 @@ Covers the core processes: carving (subtractive), modeling (additive), casting (
 | Philosophy Big 3 | | |
 | Sculpture techniques | | |
 | News section | | |
-
-**Want more of:**
-
-**Want less of:**
-
-**New interest to explore:**
-
-**Other notes:**
