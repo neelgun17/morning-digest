@@ -69,38 +69,35 @@ cd ../my-morning-digest   # or whatever you named it
 
 Open `interests.md` and replace the examples with your own interests. The file has comments explaining each field. Also customize `sources.yml` with RSS feeds relevant to your interests.
 
+### Step 2.5 — Connect GitHub to Claude Code
+
+The scheduled agent needs access to your private repo. Install the Claude GitHub App:
+
+1. Go to **https://claude.ai/code/onboarding?magic=github-app-setup**
+2. Install the app and grant access to your private repo
+
+Without this, the agent can't clone or push to your repo.
+
 ### Step 3 — Schedule the daily agent
 
-Open Claude Code inside your private repo and paste:
+> **Important:** This project uses **Claude Code scheduled triggers** — the agent runs on Anthropic's cloud for free. You do **not** need a GitHub Actions workflow or an Anthropic API key.
+
+Open Claude Code inside your private repo and run:
+
+```
+/schedule
+```
+
+Then tell it:
 
 ```
 Create a scheduled trigger called "morning-digest" that runs daily at 7am my time.
 Repo: <your private repo URL>
 Tools needed: Bash, Read, Write, Edit, Glob, Grep, WebSearch
-
-Use this prompt for the agent:
-
-You are a daily learning digest generator.
-
-1. Read interests.md for the user's interest profile.
-2. Read feedback-log.md for recent feedback. Reaction types:
-   - more_like_this — repeat this topic/depth/source
-   - go_deeper — longer, deeper piece next time
-   - too_basic — increase difficulty
-   - too_advanced — decrease difficulty
-   - not_interested — deprioritize this topic
-3. Check the 3 most recent files in daily/ for what was covered and whether feedback is filled in.
-4. Detect missed days via empty feedback tables.
-5. Read sources.yml, curl RSS feeds and HN API for content. Fill gaps with WebSearch.
-
-If active: full digest (30 min learning + 15 min news).
-If missed 1-2 days: welcome-back digest (news catch-up + one learning item).
-If missed 3+ days: news-only catch-up.
-
-6. Write to daily/YYYY-MM-DD.md. Section headings must use format: ### N. Title (X min read)
-7. Every link must be real and reputable.
-8. Commit and push: "Add daily digest for YYYY-MM-DD"
+Use the prompt from .github/prompts/digest-agent.txt
 ```
+
+The full agent prompt lives in [`.github/prompts/digest-agent.txt`](.github/prompts/digest-agent.txt) — edit it anytime to change how your digest is generated.
 
 ### Step 4 — Set up email delivery (optional but recommended)
 
