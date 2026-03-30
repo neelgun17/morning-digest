@@ -55,23 +55,11 @@ Covers the core processes: carving (subtractive), modeling (additive), casting (
 
 ## Feedback
 
-*If you have email delivery set up, each section above gets one-click reaction buttons in your inbox:*
+*Only fill in what you feel like — blank = no opinion. Reactions: `+` = more like this, `deep` = go deeper, `easy` = too basic, `hard` = too advanced, `-` = not interested.*
 
-| Button | What it tells the system |
-|--------|------------------------|
-| 👍 More like this | Topic, depth, and source all worked |
-| 🔬 Go deeper | Dedicate more time to this topic |
-| 📈 Too basic | Right topic, increase difficulty |
-| 📉 Too advanced | Right topic, simplify |
-| 👋 Not interested | Deprioritize this topic |
-
-*Plus a freeform text form for anything else.*
-
-*Without email, you can edit this section manually:*
-
-| Item | Reaction | Notes |
-|------|----------|-------|
-| LLM Memory article | | |
-| Philosophy Big 3 | | |
-| Sculpture techniques | | |
-| News section | | |
+| Section | Reaction | Notes (optional) |
+|---------|----------|------------------|
+| 1. LLM Memory | | |
+| 2. Philosophy | | |
+| 3. Sculpture | | |
+| News | | |
