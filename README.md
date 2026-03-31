@@ -179,6 +179,23 @@ my-morning-digest/
 
 ---
 
+## Pulling Template Updates
+
+When the template repo gets improvements (bug fixes, prompt tweaks, email script updates), pull them into your private repo:
+
+```bash
+# First time only — add the template as a remote
+git remote add template https://github.com/neelgun17/morning-digest.git
+
+# Whenever you want updates
+git fetch template
+git merge template/main --no-edit
+```
+
+Your personal files (`interests.md`, `feedback-log.md`, `sources.yml`, `daily/`) won't be affected since they don't exist in the template.
+
+---
+
 ## Customizing Content Sources
 
 Edit `sources.yml` to add RSS feeds relevant to your interests:

@@ -67,6 +67,9 @@ git add -A
 git commit -m "Initial setup from morning-digest template"
 gh repo create "$REPO_NAME" --private --source=. --push
 
+# Add template as upstream remote for future updates
+git remote add template https://github.com/neelgun17/morning-digest.git
+
 REPO_URL=$(gh repo view --json url -q '.url')
 GH_USERNAME=$(gh api user -q '.login')
 
