@@ -1,0 +1,88 @@
+# Pull infrastructure updates from the public morning-digest template.
+# Runs daily and can be triggered manually. No secrets needed (template is public).
+
+name: Sync from Template
+
+on:
+  schedule:
+    - cron: "0 13 * * *" # daily at 13:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add template remote and fetch
+        run: |
+          git remote add template https://github.com/neelgun17/morning-digest.git || true
+          git fetch template main
+
+      - name: Attempt merge of infrastructure files
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Check if there are any new commits to merge
+          if git merge-base --is-ancestor template/main HEAD; then
+            echo "Already up to date with template."
+            echo "status=up-to-date" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Try merging — only infrastructure files, never personal files.
+          # We use a merge but then restore personal files if they were touched.
+          if git merge template/main --allow-unrelated-histories --no-edit 2>/dev/null; then
+            # Restore personal files to pre-merge state (HEAD~1) in case template touched them
+            git checkout HEAD~1 -- interests.md feedback-log.md sources.yml worker/wrangler.toml 2>/dev/null || true
+            # Restore daily/ except sample
+            git checkout HEAD~1 -- daily/ 2>/dev/null || true
+            git checkout template/main -- daily/sample-digest.md 2>/dev/null || true
+
+            if git diff --cached --quiet && git diff --quiet; then
+              echo "Merge succeeded but no effective changes."
+              echo "status=up-to-date" >> "$GITHUB_OUTPUT"
+            else
+              git add -A
+              git commit -m "Sync infrastructure from morning-digest template" --allow-empty
+              git push
+              echo "status=merged" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # Merge failed — abort and create a PR instead
+            git merge --abort
+            echo "status=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create PR on conflict
+        if: steps.merge.outputs.status == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="sync-template-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+
+          # Cherry-pick or merge on the branch — let the user resolve
+          git merge template/main --allow-unrelated-histories --no-edit || true
+
+          # Stage everything as-is (with conflict markers) so the PR is visible
+          git add -A
+          git commit -m "Sync from template (has conflicts to resolve)" --allow-empty
+          git push -u origin "$BRANCH"
+
+          gh pr create \
+            --title "Sync infrastructure from morning-digest template" \
+            --body "$(cat <<'EOF'
+          Automatic sync from the public [morning-digest](https://github.com/neelgun17/morning-digest) template.
+
+          This PR has merge conflicts that need manual resolution. Only keep changes to infrastructure files — discard any changes to your personal files (`interests.md`, `sources.yml`, `feedback-log.md`, `worker/wrangler.toml`, `daily/`).
+          EOF
+          )"

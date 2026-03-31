@@ -55,6 +55,7 @@ cp sources.template.yml "../$REPO_NAME/sources.yml"
 
 # Copy infrastructure files
 cp .github/workflows/email-digest.yml "../$REPO_NAME/.github/workflows/email-digest.yml"
+cp .github/workflows/sync-template.yml "../$REPO_NAME/.github/workflows/sync-template.yml"
 cp .github/scripts/send-digest.js "../$REPO_NAME/.github/scripts/send-digest.js"
 cp .github/prompts/digest-agent.txt "../$REPO_NAME/.github/prompts/digest-agent.txt"
 cp worker/index.js "../$REPO_NAME/worker/index.js"
