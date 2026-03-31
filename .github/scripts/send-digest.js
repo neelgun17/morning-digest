@@ -51,7 +51,8 @@ function feedbackButtons(sectionTitle) {
     })
     .join(" ");
 
-  return `<div style="margin:12px 0 24px 0;">${links}</div>`;
+  const label = `<p style="margin:16px 0 4px 0;font-size:12px;color:#999;font-weight:600;text-transform:uppercase;">Feedback: ${sectionTitle}</p>`;
+  return `${label}<div style="margin:0 0 24px 0;">${links}</div>`;
 }
 
 // Convert markdown to HTML and inject feedback buttons after each section
@@ -70,24 +71,35 @@ function flushSection() {
   sectionBuffer = [];
 }
 
+let inNewsBlock = false;
+
 for (const line of lines) {
   const sectionMatch = line.match(/^### \d+\.\s+(.+?)(?:\s*\(.*?\))?\s*$/);
   if (sectionMatch) {
     flushSection();
+    inNewsBlock = false;
     currentSection = sectionMatch[1].trim();
+    sectionBuffer.push(line);
+  } else if (line.match(/^## News/)) {
+    flushSection();
+    currentSection = null;
+    inNewsBlock = true;
     sectionBuffer.push(line);
   } else if (line.startsWith("## Feedback")) {
     // Stop before the markdown feedback section — we replace it
     flushSection();
+    if (inNewsBlock) {
+      htmlBody += feedbackButtons("News");
+    }
     break;
   } else {
     sectionBuffer.push(line);
   }
 }
 flushSection();
-
-// Add news feedback button
-htmlBody += feedbackButtons("News");
+if (inNewsBlock) {
+  htmlBody += feedbackButtons("News");
+}
 
 // Add freeform feedback section
 if (FEEDBACK_URL) {
