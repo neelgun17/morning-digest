@@ -1,0 +1,22 @@
+name: Check for Template Updates
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for updates
+        run: |
+          git remote add template https://github.com/neelgun17/morning-digest.git || true
+          git fetch template main
+          BEHIND=$(git rev-list HEAD..template/main --count 2>/dev/null || echo "0")
+          if [ "$BEHIND" -gt 0 ]; then
+            echo "::notice::Template has $BEHIND new commit(s). Run: git fetch template && git merge template/main"
+          else
+            echo "::notice::Already up to date with template."
+          fi

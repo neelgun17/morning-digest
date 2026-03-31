@@ -23,7 +23,7 @@ See what a digest looks like: [`daily/sample-digest.md`](daily/sample-digest.md)
 │  AI AGENT (Claude Code, scheduled)                │
 │  Reads your interests + past feedback             │
 │  Generates personalized digest                    │
-│  Commits to your private repo                     │
+│  Commits to your repo                             │
 └──────────────────┬───────────────────────────────┘
                    │ triggers GitHub Action
                    ▼
@@ -45,54 +45,44 @@ See what a digest looks like: [`daily/sample-digest.md`](daily/sample-digest.md)
 
 ## Quick Start
 
-### Prerequisites
+### Step 1 — Create your repo
 
-- [Claude Code](https://claude.ai/code) with scheduled agents
-- [GitHub CLI](https://cli.github.com) (`gh`), logged in
-- Git
+Click **"Use this template"** at the top of this page → **Create a new repository** (make it private).
 
-### Step 1 — Create your private repo
+Then clone it locally:
 
 ```bash
-git clone https://github.com/neelgun17/morning-digest.git
-cd morning-digest
-./setup.sh
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+cd YOUR_REPO_NAME
 ```
 
-The script creates a **private** repo, copies templates, and pushes to GitHub.
+### Step 2 — Edit your interests
 
-### Step 2 — Edit your interest profile
+Open `interests.md` and replace the examples with your own learning interests. Also customize `sources.yml` with RSS feeds relevant to you. Commit and push:
 
 ```bash
-cd ../my-morning-digest   # or whatever you named it
+git add interests.md sources.yml
+git commit -m "Customize interests and sources"
+git push
 ```
 
-Open `interests.md` and replace the examples with your own interests. The file has comments explaining each field. Also customize `sources.yml` with RSS feeds relevant to your interests.
+### Step 3 — Connect and schedule the agent
 
-### Step 2.5 — Connect GitHub to Claude Code
+> **Important:** This project uses **Claude Code scheduled triggers** — the agent runs on Anthropic's cloud for free. No GitHub Actions workflow or Anthropic API key needed.
 
-The scheduled agent needs access to your private repo. Install the Claude GitHub App:
-
-1. Go to **https://claude.ai/code/onboarding?magic=github-app-setup**
-2. Install the app and grant access to your private repo
-
-Without this, the agent can't clone or push to your repo.
-
-### Step 3 — Schedule the daily agent
-
-> **Important:** This project uses **Claude Code scheduled triggers** — the agent runs on Anthropic's cloud for free. You do **not** need a GitHub Actions workflow or an Anthropic API key.
-
-Open Claude Code inside your private repo and run:
+1. Install the Claude GitHub App: **https://claude.ai/code/onboarding?magic=github-app-setup**
+   - Grant access to your repo
+2. Open Claude Code in your repo and run:
 
 ```
 /schedule
 ```
 
-Then tell it:
+3. Tell it:
 
 ```
 Create a scheduled trigger called "morning-digest" that runs daily at 7am my time.
-Repo: <your private repo URL>
+Repo: <your repo URL>
 Tools needed: Bash, Read, Write, Edit, Glob, Grep, WebSearch
 Use the prompt from .github/prompts/digest-agent.txt
 ```
@@ -101,7 +91,7 @@ The full agent prompt lives in [`.github/prompts/digest-agent.txt`](.github/prom
 
 ### Step 4 — Set up email delivery (optional but recommended)
 
-This sends your digest as a beautiful HTML email with one-click feedback buttons.
+This sends your digest as an HTML email with one-click feedback buttons.
 
 **a) Email via Resend:**
 
@@ -118,18 +108,19 @@ The GitHub Action at `.github/workflows/email-digest.yml` fires automatically wh
 
 1. Install [Wrangler](https://developers.cloudflare.com/workers/wrangler/install-and-update/): `npm install -g wrangler`
 2. Log in: `wrangler login`
-3. Edit `worker/wrangler.toml` — set `GITHUB_REPO` to your `username/repo-name`
-4. Deploy:
+3. Deploy:
 
 ```bash
 cd worker
 npx wrangler deploy
 npx wrangler secret put GITHUB_TOKEN
 # paste a GitHub personal access token with repo write access
+npx wrangler secret put GITHUB_REPO
+# paste your username/repo-name (e.g. janedoe/my-morning-digest)
 ```
 
-5. Copy the Worker URL (e.g., `https://morning-digest-feedback.yourname.workers.dev`)
-6. Add it as a GitHub repo secret: `FEEDBACK_URL`
+4. Copy the Worker URL (e.g., `https://morning-digest-feedback.yourname.workers.dev`)
+5. Add it as a GitHub repo secret: `FEEDBACK_URL`
 
 Now each section in your email gets these reaction buttons:
 
@@ -170,6 +161,7 @@ my-morning-digest/
     2026-03-26.md             ← Auto-generated daily digests
     ...
   .github/
+    prompts/digest-agent.txt  ← Agent instructions (edit to customize)
     workflows/email-digest.yml  ← Sends email on new digest
     scripts/send-digest.js      ← Markdown → HTML email renderer
   worker/
@@ -181,7 +173,7 @@ my-morning-digest/
 
 ## Pulling Template Updates
 
-When the template repo gets improvements (bug fixes, prompt tweaks, email script updates), pull them into your private repo:
+When the template repo gets improvements (prompt tweaks, email script updates), pull them into your repo:
 
 ```bash
 # First time only — add the template as a remote
@@ -189,10 +181,12 @@ git remote add template https://github.com/neelgun17/morning-digest.git
 
 # Whenever you want updates
 git fetch template
-git merge template/main --no-edit --allow-unrelated-histories
+git merge template/main --allow-unrelated-histories
 ```
 
-Your personal files (`interests.md`, `feedback-log.md`, `sources.yml`, `daily/`) won't be affected since they don't exist in the template.
+Your personal files (`interests.md`, `feedback-log.md`, `sources.yml`, `daily/`) won't conflict since they don't exist in the template.
+
+You can also run the **"Check for Template Updates"** workflow (Actions tab) to see if updates are available.
 
 ---
 
