@@ -189,7 +189,7 @@ git remote add template https://github.com/neelgun17/morning-digest.git
 
 # Whenever you want updates
 git fetch template
-git merge template/main --no-edit
+git merge template/main --no-edit --allow-unrelated-histories
 ```
 
 Your personal files (`interests.md`, `feedback-log.md`, `sources.yml`, `daily/`) won't be affected since they don't exist in the template.
