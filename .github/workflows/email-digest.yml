@@ -54,3 +54,4 @@ jobs:
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           FEEDBACK_URL: ${{ secrets.FEEDBACK_URL }}
+          FEEDBACK_SECRET: ${{ secrets.FEEDBACK_SECRET }}

@@ -117,10 +117,14 @@ npx wrangler secret put GITHUB_TOKEN
 # paste a GitHub personal access token with repo write access
 npx wrangler secret put GITHUB_REPO
 # paste your username/repo-name (e.g. janedoe/my-morning-digest)
+npx wrangler secret put FEEDBACK_SECRET
+# paste a random string (e.g. run: openssl rand -hex 32)
 ```
 
 4. Copy the Worker URL (e.g., `https://morning-digest-feedback.yourname.workers.dev`)
-5. Add it as a GitHub repo secret: `FEEDBACK_URL`
+5. Add these as GitHub repo secrets:
+   - `FEEDBACK_URL` — your Worker URL
+   - `FEEDBACK_SECRET` — the same random string you used above
 
 Now each section in your email gets these reaction buttons:
 
@@ -138,15 +142,15 @@ Plus a freeform feedback form for anything else.
 
 ## What Happens When You Miss a Day
 
-The agent detects whether you've been reading by checking if feedback exists on recent digests:
+The agent checks the gap between today and the last generated digest to decide what to send:
 
 | Scenario | What you get |
 |----------|-------------|
-| **Active** (feedback on yesterday's digest) | Full digest — 30 min learning + 15 min news |
-| **Missed 1-2 days** | Welcome-back digest — news catch-up prioritized, plus one short learning item |
-| **Missed 3+ days** | Catch-up digest — news-only summary of the most significant stories. Learning resumes next day. |
+| **Normal** (digest generated recently) | Full digest — 30 min learning + 15 min news |
+| **5-7 days since last digest** | Welcome-back digest — news catch-up prioritized, plus one short learning item |
+| **8+ days since last digest** | Catch-up digest — news-only summary of the most significant stories. Learning resumes next day. |
 
-News goes stale, learning content doesn't — so when you've been away, the system gets you current on the world first.
+The system defaults to a full digest. It only downgrades when there's a real gap in generated digests — not reading without leaving feedback won't penalize you.
 
 ---
 

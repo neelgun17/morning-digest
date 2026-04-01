@@ -2,13 +2,33 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // Authenticate all requests with a shared secret token
+    const token = url.searchParams.get("token");
+    if (!env.FEEDBACK_SECRET || token !== env.FEEDBACK_SECRET) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
     if (url.pathname === "/click") return handleClick(url, env);
-    if (url.pathname === "/form" && request.method === "GET") return handleFormPage(url);
-    if (url.pathname === "/form" && request.method === "POST") return handleFormSubmit(request, env);
+    if (url.pathname === "/form" && request.method === "GET") return handleFormPage(url, env);
+    if (url.pathname === "/form" && request.method === "POST") return handleFormSubmit(request, url, env);
 
     return new Response("Not found", { status: 404 });
   },
 };
+
+// Strip markdown/HTML formatting to prevent injection into feedback-log.md
+function sanitize(input, maxLength = 200) {
+  return input
+    .replace(/[[\](){}|`*_~#<>!]/g, "")
+    .replace(/\n/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+// Validate date format (YYYY-MM-DD)
+function isValidDate(date) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date);
+}
 
 async function handleClick(url, env) {
   const date = url.searchParams.get("date");
@@ -19,12 +39,17 @@ async function handleClick(url, env) {
     return new Response("Missing parameters", { status: 400 });
   }
 
+  if (!isValidDate(date)) {
+    return new Response("Invalid date format", { status: 400 });
+  }
+
   const validReactions = ["more_like_this", "go_deeper", "too_basic", "too_advanced", "not_interested"];
   if (!validReactions.includes(reaction)) {
     return new Response("Invalid reaction", { status: 400 });
   }
 
-  const entry = `- **${section}**: ${reaction}`;
+  const cleanSection = sanitize(section, 100);
+  const entry = `- **${cleanSection}**: ${reaction}`;
   await appendFeedback(env, date, entry);
 
   const label = {
@@ -35,13 +60,14 @@ async function handleClick(url, env) {
     not_interested: "Not interested",
   }[reaction];
 
-  return new Response(thankYouPage(label, section), {
+  return new Response(thankYouPage(label, cleanSection), {
     headers: { "Content-Type": "text/html" },
   });
 }
 
-function handleFormPage(url) {
+function handleFormPage(url, env) {
   const date = url.searchParams.get("date") || "";
+  const tokenParam = encodeURIComponent(env.FEEDBACK_SECRET || "");
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -59,9 +85,9 @@ function handleFormPage(url) {
 <body>
   <h2>What's on your mind?</h2>
   <p>This goes directly into your feedback log. The next digest will take it into account.</p>
-  <form method="POST" action="/form">
-    <input type="hidden" name="date" value="${date}">
-    <textarea name="text" placeholder="Want more of something? Less of something? New interest to explore? Anything goes."></textarea>
+  <form method="POST" action="/form?token=${tokenParam}">
+    <input type="hidden" name="date" value="${sanitize(date, 10)}">
+    <textarea name="text" placeholder="Want more of something? Less of something? New interest to explore? Anything goes." maxlength="500"></textarea>
     <br>
     <button type="submit">Send feedback</button>
   </form>
@@ -71,7 +97,7 @@ function handleFormPage(url) {
   return new Response(html, { headers: { "Content-Type": "text/html" } });
 }
 
-async function handleFormSubmit(request, env) {
+async function handleFormSubmit(request, url, env) {
   const formData = await request.formData();
   const date = formData.get("date") || "unknown";
   const text = formData.get("text") || "";
@@ -82,15 +108,17 @@ async function handleFormSubmit(request, env) {
     });
   }
 
-  const entry = `- **Freeform**: "${text.trim()}"`;
-  await appendFeedback(env, date, entry);
+  const cleanDate = isValidDate(date) ? date : "unknown";
+  const cleanText = sanitize(text, 500);
+  const entry = `- **Freeform**: "${cleanText}"`;
+  await appendFeedback(env, cleanDate, entry);
 
   return new Response(thankYouPage("Your feedback", "freeform"), {
     headers: { "Content-Type": "text/html" },
   });
 }
 
-async function appendFeedback(env, date, entry) {
+async function appendFeedback(env, date, entry, retries = 2) {
   const repo = env.GITHUB_REPO;
   const token = env.GITHUB_TOKEN;
   const path = "feedback-log.md";
@@ -111,6 +139,12 @@ async function appendFeedback(env, date, entry) {
   const fileData = await getRes.json();
   const currentContent = atob(fileData.content.replace(/\n/g, ""));
   const sha = fileData.sha;
+
+  // Check for duplicate entry
+  if (currentContent.includes(entry)) {
+    console.log("Duplicate feedback entry, skipping");
+    return;
+  }
 
   // Check if there's already a section for this date
   const dateHeader = `## ${date} (email)`;
@@ -145,16 +179,19 @@ async function appendFeedback(env, date, entry) {
   });
 
   if (!putRes.ok) {
-    // Retry once on SHA conflict
-    if (putRes.status === 409) {
-      console.log("SHA conflict, retrying...");
-      return appendFeedback(env, date, entry);
+    if (putRes.status === 409 && retries > 0) {
+      console.log(`SHA conflict, retrying (${retries} left)...`);
+      return appendFeedback(env, date, entry, retries - 1);
     }
     console.error("Failed to update feedback-log.md:", await putRes.text());
   }
 }
 
 function thankYouPage(label, section) {
+  // Escape HTML in label/section to prevent XSS
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const safeLabel = esc(label);
+  const safeSection = esc(section);
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -171,7 +208,7 @@ function thankYouPage(label, section) {
 <body>
   <div class="check">✓</div>
   <h2>Got it!</h2>
-  <p>Recorded: <strong>${label}</strong>${section ? ` for ${section}` : ""}.</p>
+  <p>Recorded: <strong>${safeLabel}</strong>${safeSection ? ` for ${safeSection}` : ""}.</p>
   <p>Tomorrow's digest will take this into account.</p>
 </body>
 </html>`;

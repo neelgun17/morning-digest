@@ -13,6 +13,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_TO = process.env.EMAIL_TO;
 const EMAIL_FROM = process.env.EMAIL_FROM || "Morning Digest <digest@resend.dev>";
 const FEEDBACK_URL = process.env.FEEDBACK_URL;
+const FEEDBACK_SECRET = process.env.FEEDBACK_SECRET;
 
 if (!RESEND_API_KEY || !EMAIL_TO) {
   console.error("Missing RESEND_API_KEY or EMAIL_TO");
@@ -46,7 +47,7 @@ function feedbackButtons(sectionTitle) {
 
   const links = reactions
     .map((r) => {
-      const url = `${FEEDBACK_URL}/click?date=${encodeURIComponent(date)}&section=${encodeURIComponent(sectionTitle)}&reaction=${r.key}`;
+      const url = `${FEEDBACK_URL}/click?token=${encodeURIComponent(FEEDBACK_SECRET || "")}&date=${encodeURIComponent(date)}&section=${encodeURIComponent(sectionTitle)}&reaction=${r.key}`;
       return `<a href="${url}" style="display:inline-block;padding:6px 12px;margin:3px;border-radius:6px;background:#f0f0f0;color:#333;text-decoration:none;font-size:13px;">${r.emoji} ${r.label}</a>`;
     })
     .join(" ");
@@ -107,7 +108,7 @@ if (FEEDBACK_URL) {
     <div style="margin:32px 0;padding:20px;border-radius:8px;background:#f8f8f8;">
       <p style="margin:0 0 8px 0;font-weight:600;">Anything else on your mind?</p>
       <p style="margin:0;font-size:14px;color:#666;">
-        <a href="${FEEDBACK_URL}/form?date=${encodeURIComponent(date)}" style="color:#0066cc;">Open feedback form →</a>
+        <a href="${FEEDBACK_URL}/form?token=${encodeURIComponent(FEEDBACK_SECRET || "")}&date=${encodeURIComponent(date)}" style="color:#0066cc;">Open feedback form →</a>
       </p>
     </div>
   `;
