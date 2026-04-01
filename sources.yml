@@ -1,6 +1,8 @@
 # Content sources the agent checks alongside web search.
 # Add or remove feeds to match your interests.
 # Copy this to sources.yml and customize.
+#
+# The agent picks 2-3 feeds per day (not all of them) to stay within time limits.
 
 rss:
   # Tech & AI
@@ -16,10 +18,25 @@ rss:
   - url: https://openai.com/blog/rss.xml
     name: OpenAI Blog
     category: ai
+  - url: https://arxiv.org/rss/cs.AI
+    name: arXiv AI
+    category: ai
+  - url: https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss.xml
+    name: IEEE Spectrum AI
+    category: ai
+  - url: https://twobithistory.org/feed.xml
+    name: Two-Bit History
+    category: tech
 
   # Finance & Economy
   - url: https://feeds.bloomberg.com/markets/news.rss
     name: Bloomberg Markets
+    category: finance
+  - url: https://www.ft.com/rss/home
+    name: Financial Times
+    category: finance
+  - url: https://feeds.feedburner.com/MattLevine
+    name: Matt Levine (Bloomberg)
     category: finance
 
   # World News
@@ -29,10 +46,22 @@ rss:
   - url: https://feeds.bbci.co.uk/news/world/rss.xml
     name: BBC World
     category: news
+  - url: https://www.aljazeera.com/xml/rss/all.xml
+    name: Al Jazeera
+    category: news
+  - url: https://www.scmp.com/rss/91/feed
+    name: South China Morning Post
+    category: news
 
-  # Philosophy & Culture (add your own!)
+  # Philosophy & Culture
   - url: https://aeon.co/feed.rss
     name: Aeon Essays
+    category: intellectual
+  - url: https://www.theparisreview.org/blog/feed/
+    name: Paris Review Blog
+    category: intellectual
+  - url: https://nautil.us/feed/
+    name: Nautilus
     category: intellectual
 
 apis:

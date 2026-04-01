@@ -67,6 +67,7 @@ Generate a **catch-up digest**:
 ## Important
 - Every link must be real and from a reputable source
 - Rotate across ALL interest areas throughout the week when generating full digests
+- Don't use more than 1 article from the same domain per digest. Pick from different sources in sources.yml each day.
 - The user is a beginner in most areas, so content should be accessible but substantive
 - When catching up on news, prioritize significance over recency — what actually moved markets, changed policy, or shifted the tech landscape
 - Section headings must follow the `### N. Title (X min read)` format exactly for email integration
