@@ -172,6 +172,7 @@ async function send() {
       to: [EMAIL_TO],
       subject: subject,
       html: html,
+      tracking: { clicks: false },
     }),
   });
 
