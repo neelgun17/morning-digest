@@ -1,6 +1,7 @@
 name: Email Digest
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - 'daily/*.md'
@@ -31,8 +32,12 @@ jobs:
         id: digest
         run: |
           FILE=$(git diff --name-only HEAD~1 HEAD -- 'daily/*.md' | grep -v sample | head -1)
+          # For manual triggers, fall back to the latest digest
           if [ -z "$FILE" ]; then
-            echo "No new digest found"
+            FILE=$(ls -1 daily/*.md 2>/dev/null | grep -v sample | sort | tail -1)
+          fi
+          if [ -z "$FILE" ]; then
+            echo "No digest found"
             exit 0
           fi
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
