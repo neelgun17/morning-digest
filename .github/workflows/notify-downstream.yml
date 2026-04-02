@@ -1,0 +1,20 @@
+name: Notify Downstream Repos
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'daily/*.md'
+      - 'feedback-log.md'
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.PRIVATE_REPO_TOKEN != '' }}
+    steps:
+      - name: Dispatch sync event to private repo
+        run: |
+          gh api repos/${{ github.repository_owner }}/my-morning-digest/dispatches \
+            -f event_type=template-sync
+        env:
+          GH_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}

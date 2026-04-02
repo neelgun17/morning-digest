@@ -1,22 +1,38 @@
-name: Check for Template Updates
+name: Sync Template Updates
+
 on:
+  repository_dispatch:
+    types: [template-sync]
   workflow_dispatch:
 
 jobs:
-  check:
+  sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.PRIVATE_REPO_TOKEN || github.token }}
 
-      - name: Check for updates
+      - name: Merge template changes
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote add template https://github.com/neelgun17/morning-digest.git || true
           git fetch template main
+
           BEHIND=$(git rev-list HEAD..template/main --count 2>/dev/null || echo "0")
-          if [ "$BEHIND" -gt 0 ]; then
-            echo "::notice::Template has $BEHIND new commit(s). Run: git fetch template && git merge template/main"
-          else
+          if [ "$BEHIND" -eq 0 ]; then
             echo "::notice::Already up to date with template."
+            exit 0
+          fi
+
+          echo "::notice::Merging $BEHIND commit(s) from template..."
+          if git merge template/main --no-edit; then
+            git push
+            echo "::notice::Successfully synced template updates."
+          else
+            git merge --abort
+            echo "::error::Merge conflict — manual sync required. Run: git fetch template && git merge template/main"
+            exit 1
           fi
