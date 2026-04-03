@@ -11,6 +11,8 @@ export default {
     if (url.pathname === "/click") return handleClick(url, env);
     if (url.pathname === "/form" && request.method === "GET") return handleFormPage(url, env);
     if (url.pathname === "/form" && request.method === "POST") return handleFormSubmit(request, url, env);
+    if (url.pathname === "/source" && request.method === "GET") return handleSourcePage(url, env);
+    if (url.pathname === "/source" && request.method === "POST") return handleSourceSubmit(request, url, env);
 
     return new Response("Not found", { status: 404 });
   },
@@ -184,6 +186,133 @@ async function appendFeedback(env, date, entry, retries = 2) {
       return appendFeedback(env, date, entry, retries - 1);
     }
     console.error("Failed to update feedback-log.md:", await putRes.text());
+  }
+}
+
+function isValidUrl(str) {
+  return /^https?:\/\/.+\..+/.test(str);
+}
+
+function handleSourcePage(url, env) {
+  const tokenParam = encodeURIComponent(env.FEEDBACK_SECRET || "");
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suggest a Source</title>
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 20px; color: #1a1a1a; }
+    h2 { font-size: 20px; }
+    label { display: block; margin-top: 16px; font-size: 14px; font-weight: 600; color: #444; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; font-family: inherit; box-sizing: border-box; margin-top: 4px; }
+    button { margin-top: 20px; padding: 10px 24px; background: #0066cc; color: white; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+    button:hover { background: #0052a3; }
+    .hint { font-size: 13px; color: #888; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <h2>Suggest a Source</h2>
+  <p>Add an RSS feed or website to your digest. It'll be included in future feed rotation.</p>
+  <form method="POST" action="/source?token=${tokenParam}">
+    <label>Feed URL <span style="color:#c00;">*</span></label>
+    <input type="url" name="url" placeholder="https://example.com/feed.xml" required>
+    <p class="hint">RSS or Atom feed URL works best.</p>
+
+    <label>Name</label>
+    <input type="text" name="name" placeholder="e.g. Example Blog" maxlength="100">
+
+    <label>Category</label>
+    <select name="category">
+      <option value="tech">Tech</option>
+      <option value="ai">AI</option>
+      <option value="finance">Finance</option>
+      <option value="news">News</option>
+      <option value="intellectual">Intellectual</option>
+    </select>
+
+    <br>
+    <button type="submit">Add source</button>
+  </form>
+</body>
+</html>`;
+
+  return new Response(html, { headers: { "Content-Type": "text/html" } });
+}
+
+async function handleSourceSubmit(request, url, env) {
+  const formData = await request.formData();
+  const sourceUrl = (formData.get("url") || "").trim();
+  const name = formData.get("name") || "";
+  const category = formData.get("category") || "tech";
+
+  if (!sourceUrl || !isValidUrl(sourceUrl)) {
+    return new Response("Invalid URL. Must start with http:// or https://", { status: 400 });
+  }
+
+  const cleanName = sanitize(name, 100) || new URL(sourceUrl).hostname;
+  const cleanCategory = sanitize(category, 30);
+
+  await appendSource(env, sourceUrl, cleanName, cleanCategory);
+
+  return new Response(thankYouPage(`${cleanName}`, "your sources"), {
+    headers: { "Content-Type": "text/html" },
+  });
+}
+
+async function appendSource(env, sourceUrl, name, category, retries = 2) {
+  const repo = env.GITHUB_REPO;
+  const token = env.GITHUB_TOKEN;
+  const path = "sources.yml";
+  const apiBase = `https://api.github.com/repos/${repo}/contents/${path}`;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github.v3+json",
+    "User-Agent": "morning-digest-feedback",
+  };
+
+  const getRes = await fetch(apiBase, { headers });
+  if (!getRes.ok) {
+    console.error("Failed to get sources.yml:", await getRes.text());
+    return;
+  }
+
+  const fileData = await getRes.json();
+  const currentContent = atob(fileData.content.replace(/\n/g, ""));
+  const sha = fileData.sha;
+
+  // Check for duplicate URL
+  if (currentContent.includes(sourceUrl)) {
+    console.log("Source already exists, skipping");
+    return;
+  }
+
+  // Append new source before the apis: section
+  const entry = `\n  # User-suggested\n  - url: ${sourceUrl}\n    name: ${name}\n    category: ${category}\n`;
+  let newContent;
+  const apisIndex = currentContent.indexOf("\napis:");
+  if (apisIndex !== -1) {
+    newContent = currentContent.slice(0, apisIndex) + entry + currentContent.slice(apisIndex);
+  } else {
+    newContent = currentContent + entry;
+  }
+
+  const putRes = await fetch(apiBase, {
+    method: "PUT",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: `Add user-suggested source: ${name}`,
+      content: btoa(unescape(encodeURIComponent(newContent))),
+      sha: sha,
+    }),
+  });
+
+  if (!putRes.ok) {
+    if (putRes.status === 409 && retries > 0) {
+      console.log(`SHA conflict, retrying (${retries} left)...`);
+      return appendSource(env, sourceUrl, name, category, retries - 1);
+    }
+    console.error("Failed to update sources.yml:", await putRes.text());
   }
 }
 

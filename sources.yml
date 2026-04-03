@@ -1,8 +1,12 @@
 # Content sources the agent checks alongside web search.
-# Add or remove feeds to match your interests.
-# Copy this to sources.yml and customize.
-#
 # The agent picks 2-3 feeds per day (not all of them) to stay within time limits.
+#
+# To add a source manually, add an entry under rss: with these fields:
+#   - url: <RSS or Atom feed URL>
+#     name: <display name>
+#     category: tech | ai | finance | news | intellectual
+#
+# You can also suggest sources from the digest email using the "Suggest a source" link.
 
 rss:
   # Tech & AI

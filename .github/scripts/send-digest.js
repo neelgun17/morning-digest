@@ -110,6 +110,9 @@ if (FEEDBACK_URL) {
       <p style="margin:0;font-size:14px;color:#666;">
         <a href="${FEEDBACK_URL}/form?token=${encodeURIComponent(FEEDBACK_SECRET || "")}&date=${encodeURIComponent(date)}" style="color:#0066cc;">Open feedback form →</a>
       </p>
+      <p style="margin:8px 0 0 0;font-size:14px;color:#666;">
+        <a href="${FEEDBACK_URL}/source?token=${encodeURIComponent(FEEDBACK_SECRET || "")}" style="color:#0066cc;">Suggest a source →</a>
+      </p>
     </div>
   `;
 }
