@@ -10,7 +10,7 @@ on:
 jobs:
   notify:
     runs-on: ubuntu-latest
-    if: ${{ secrets.PRIVATE_REPO_TOKEN != '' }}
+    if: ${{ vars.DOWNSTREAM_ENABLED != 'false' }}
     steps:
       - name: Dispatch sync event to private repo
         run: |
