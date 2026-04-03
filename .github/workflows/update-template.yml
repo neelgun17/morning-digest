@@ -30,7 +30,7 @@ jobs:
           fi
 
           echo "::notice::Merging $BEHIND commit(s) from template..."
-          if git merge template/main --no-edit; then
+          if git merge template/main --no-edit 2>/dev/null; then
             # Remove workflows that only belong in the template repo
             REMOVED=false
             for f in .github/workflows/notify-downstream.yml; do
@@ -45,7 +45,28 @@ jobs:
             git push
             echo "::notice::Successfully synced template updates."
           else
-            git merge --abort
-            echo "::error::Merge conflict — manual sync required. Run: git fetch template && git merge template/main"
-            exit 1
+            echo "::notice::Merge conflict detected, attempting auto-resolve..."
+            # For conflicting files, keep the user's version and append any new lines from template
+            CONFLICTED=$(git diff --name-only --diff-filter=U)
+            RESOLVED=true
+            for f in $CONFLICTED; do
+              if [ "$f" = ".gitignore" ]; then
+                # Combine both versions, deduplicate, and sort
+                git show :2:"$f" > /tmp/ours 2>/dev/null || true
+                git show :3:"$f" > /tmp/theirs 2>/dev/null || true
+                cat /tmp/ours /tmp/theirs | sort -u > "$f"
+                git add "$f"
+              else
+                echo "::error::Cannot auto-resolve conflict in $f"
+                RESOLVED=false
+              fi
+            done
+            if [ "$RESOLVED" = false ]; then
+              git merge --abort
+              echo "::error::Merge conflict — manual sync required. Run: git fetch template && git merge template/main"
+              exit 1
+            fi
+            git commit --no-edit
+            git push
+            echo "::notice::Successfully synced template updates (with auto-resolved conflicts)."
           fi
