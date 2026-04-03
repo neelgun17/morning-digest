@@ -177,7 +177,11 @@ my-morning-digest/
 
 ## Pulling Template Updates
 
-When the template repo gets improvements (prompt tweaks, email script updates), pull them into your repo:
+Your repo automatically checks for template updates **daily at 6am UTC** via the `update-template.yml` workflow. When improvements are available (prompt tweaks, email script updates), they're merged automatically. If there's a merge conflict, the workflow will fail and notify you — just resolve it manually.
+
+You can also trigger a sync anytime from the **Actions** tab → **Sync Template Updates** → **Run workflow**.
+
+**Manual alternative:**
 
 ```bash
 # First time only — add the template as a remote
@@ -189,8 +193,6 @@ git merge template/main --allow-unrelated-histories
 ```
 
 Your personal files (`interests.md`, `feedback-log.md`, `sources.yml`, `daily/`) won't conflict since they don't exist in the template.
-
-You can also run the **"Check for Template Updates"** workflow (Actions tab) to see if updates are available.
 
 ---
 
