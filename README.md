@@ -179,6 +179,8 @@ my-morning-digest/
 
 Your repo automatically checks for template updates **daily at 6am UTC** via the `update-template.yml` workflow. When improvements are available (prompt tweaks, email script updates), they're merged automatically. If there's a merge conflict, the workflow will fail and notify you — just resolve it manually.
 
+**Required setup:** Go to your repo's **Settings → Actions → General → Workflow permissions** and select **"Read and write permissions"**. This allows the sync workflow to push merged changes.
+
 You can also trigger a sync anytime from the **Actions** tab → **Sync Template Updates** → **Run workflow**.
 
 **Manual alternative:**
