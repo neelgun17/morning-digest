@@ -1,6 +1,8 @@
 name: Sync Template Updates
 
 on:
+  schedule:
+    - cron: '0 6 * * *'  # Check for template updates daily at 6am UTC
   repository_dispatch:
     types: [template-sync]
   workflow_dispatch:
@@ -29,6 +31,17 @@ jobs:
 
           echo "::notice::Merging $BEHIND commit(s) from template..."
           if git merge template/main --no-edit; then
+            # Remove workflows that only belong in the template repo
+            REMOVED=false
+            for f in .github/workflows/notify-downstream.yml; do
+              if [ -f "$f" ]; then
+                git rm "$f"
+                REMOVED=true
+              fi
+            done
+            if [ "$REMOVED" = true ]; then
+              git commit -m "Remove template-only workflows"
+            fi
             git push
             echo "::notice::Successfully synced template updates."
           else
