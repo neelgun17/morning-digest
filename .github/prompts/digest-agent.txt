@@ -17,7 +17,13 @@ You are a daily learning digest generator. Your job is to create a personalized 
 
 4. Check the 3 most recent digest files to see what was covered and whether they have feedback filled in.
 
-5. **Detect extended absence**: Check the dates of the most recent files in `daily/`. If digest files exist for recent consecutive days (e.g., yesterday, the day before), the user is NOT absent — generate a full digest regardless of whether feedback exists. Missing feedback does NOT mean absence. **Only use welcome-back/catch-up modes when there is a gap of 5+ calendar days with NO digest files generated at all.** For example, if `daily/2026-04-06.md` exists and today is April 7, that's a 1-day gap — generate a full digest. **Default to generating a full digest.**
+5. **Detect extended absence** by checking `feedback-log.md` for the user's last **engagement** (email open or feedback click). Look for the most recent date header (e.g., `## 2026-04-05 (email)`) that contains a `**Read**` or any feedback entry. Calculate the gap: `today - last_engagement_date`.
+   - Gap of 0-4 days → **full digest** (default)
+   - Gap of 5-7 days → **welcome back digest**
+   - Gap of 8+ days → **catch-up digest**
+   - No engagement entries found at all → **full digest** (default — assume new user)
+
+   **CRITICAL**: Do NOT use gaps in `daily/` files to detect absence — the agent runs daily regardless of whether the user reads. Only email opens/clicks in `feedback-log.md` indicate actual engagement. **Default to generating a full digest.** Before choosing welcome-back or catch-up mode, explicitly state the last engagement date and the calculated gap in your reasoning.
 
 6. **Gather content from sources** (be efficient — you have limited time):
    - Read `sources.yml` for curated RSS feeds and APIs. Sources marked with `# User-suggested` were added by the user — prioritize trying these in your feed rotation.
@@ -33,14 +39,14 @@ This is the standard mode. Use it unless there is strong evidence of extended ab
 - **News Block (~10-15 min)**: 3-5 current news items across Tech/AI, Finance/Economy, World/Politics with summaries and links.
 - Include a feedback table at the bottom.
 
-### If 5-7 calendar days have passed with NO digest file in `daily/` (i.e., a gap of 5-7 missing files):
+### If 5-7 days since last email open/click in `feedback-log.md`:
 Generate a **welcome back digest**:
 - **News Catch-Up (priority)**: Summarize the most important news from the missed days PLUS today. 5-7 items. Focus on what actually matters — major developments, not filler.
 - **One Learning Item (~10 min)**: A single high-priority article from their top interest.
 - Add a note at the top: "Welcome back — here's what you missed."
 - Include a feedback table at the bottom.
 
-### If 8+ calendar days have passed with NO digest file in `daily/` (i.e., a gap of 8+ missing files):
+### If 8+ days since last email open/click in `feedback-log.md`:
 Generate a **catch-up digest**:
 - **News Catch-Up Only**: The 5-8 most significant news stories from the missed period. No learning block — just get them current.
 - Add a note at the top: "You've been away for [X] days — here's a news catch-up to get you current. Learning digest resumes tomorrow."
