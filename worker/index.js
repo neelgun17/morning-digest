@@ -1,5 +1,5 @@
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     // Authenticate all requests with a shared secret token
@@ -13,10 +13,80 @@ export default {
     if (url.pathname === "/form" && request.method === "POST") return handleFormSubmit(request, url, env);
     if (url.pathname === "/source" && request.method === "GET") return handleSourcePage(url, env);
     if (url.pathname === "/source" && request.method === "POST") return handleSourceSubmit(request, url, env);
+    if (url.pathname === "/open") return handleOpen(url, env, ctx);
+    if (url.pathname === "/webhook" && request.method === "POST") return handleResendWebhook(request, env);
 
     return new Response("Not found", { status: 404 });
   },
 };
+
+// Tracking pixel endpoint — logs an email open when the image is loaded
+async function handleOpen(url, env, ctx) {
+  const date = url.searchParams.get("date");
+  if (date && isValidDate(date)) {
+    // Log the open without blocking the pixel response
+    ctx.waitUntil(appendFeedback(env, date, "- **Read**: email opened"));
+  }
+  // Return a 1x1 transparent PNG
+  const pixel = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+    0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x62, 0x00, 0x00, 0x00, 0x02,
+    0x00, 0x01, 0xe2, 0x21, 0xbc, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
+    0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+  ]);
+  return new Response(pixel, {
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  });
+}
+
+// Resend webhook endpoint — handles email.opened events
+async function handleResendWebhook(request, env) {
+  try {
+    const body = await request.json();
+    const eventType = body.type;
+
+    if (eventType === "email.opened") {
+      // Extract date from subject line
+      // Supports both "Daily Digest — Thursday, April 9, 2026" and "Morning Digest — 2026-04-02"
+      const subject = body.data?.subject || "";
+      let date = null;
+
+      // Try YYYY-MM-DD first
+      const isoMatch = subject.match(/(\d{4}-\d{2}-\d{2})/);
+      if (isoMatch) {
+        date = isoMatch[1];
+      } else {
+        // Try "Month Day, Year" format (e.g. "April 9, 2026")
+        const longMatch = subject.match(/(\w+)\s+(\d{1,2}),\s+(\d{4})/);
+        if (longMatch) {
+          const monthNames = {
+            January: "01", February: "02", March: "03", April: "04",
+            May: "05", June: "06", July: "07", August: "08",
+            September: "09", October: "10", November: "11", December: "12",
+          };
+          const month = monthNames[longMatch[1]];
+          if (month) {
+            date = `${longMatch[3]}-${month}-${longMatch[2].padStart(2, "0")}`;
+          }
+        }
+      }
+
+      if (date) {
+        await appendFeedback(env, date, "- **Read**: email opened");
+      }
+    }
+
+    return new Response("OK", { status: 200 });
+  } catch (e) {
+    console.error("Webhook error:", e);
+    return new Response("Bad request", { status: 400 });
+  }
+}
 
 // Strip markdown/HTML formatting to prevent injection into feedback-log.md
 function sanitize(input, maxLength = 200) {
