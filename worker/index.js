@@ -209,7 +209,7 @@ async function appendFeedback(env, date, entry, retries = 2) {
   }
 
   const fileData = await getRes.json();
-  const currentContent = atob(fileData.content.replace(/\n/g, ""));
+  const currentContent = decodeURIComponent(escape(atob(fileData.content.replace(/\n/g, ""))));
   const sha = fileData.sha;
 
   // Check for duplicate entry
@@ -348,7 +348,7 @@ async function appendSource(env, sourceUrl, name, category, retries = 2) {
   }
 
   const fileData = await getRes.json();
-  const currentContent = atob(fileData.content.replace(/\n/g, ""));
+  const currentContent = decodeURIComponent(escape(atob(fileData.content.replace(/\n/g, ""))));
   const sha = fileData.sha;
 
   // Check for duplicate URL
