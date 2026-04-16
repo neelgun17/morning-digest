@@ -102,6 +102,18 @@ function isValidDate(date) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date);
 }
 
+// Return the slice of content belonging to a given date's section,
+// from the header through (but not including) the next "## " heading or EOF.
+// Returns "" if the header is not found.
+function sectionSlice(content, dateHeader) {
+  const start = content.indexOf(dateHeader);
+  if (start === -1) return "";
+  const afterHeader = start + dateHeader.length;
+  const rest = content.slice(afterHeader);
+  const nextIdx = rest.search(/\n## /);
+  return nextIdx === -1 ? content.slice(start) : content.slice(start, afterHeader + nextIdx);
+}
+
 async function handleClick(url, env) {
   const date = url.searchParams.get("date");
   const section = url.searchParams.get("section");
@@ -212,14 +224,15 @@ async function appendFeedback(env, date, entry, retries = 2) {
   const currentContent = decodeURIComponent(escape(atob(fileData.content.replace(/\n/g, ""))));
   const sha = fileData.sha;
 
-  // Check for duplicate entry
-  if (currentContent.includes(entry)) {
+  const dateHeader = `## ${date} (email)`;
+
+  // Check for duplicate entry within this date's section only
+  if (sectionSlice(currentContent, dateHeader).includes(entry)) {
     console.log("Duplicate feedback entry, skipping");
     return;
   }
 
   // Check if there's already a section for this date
-  const dateHeader = `## ${date} (email)`;
   let newContent;
 
   if (currentContent.includes(dateHeader)) {
