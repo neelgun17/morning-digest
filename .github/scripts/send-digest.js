@@ -154,7 +154,6 @@ const html = `
   <p style="font-size:12px;color:#999;text-align:center;">
     Morning Digest · <a href="https://github.com/neelgun17/morning-digest" style="color:#999;">How this works</a>
   </p>
-  ${FEEDBACK_URL ? `<img src="${FEEDBACK_URL}/open?token=${encodeURIComponent(FEEDBACK_SECRET || "")}&date=${encodeURIComponent(date)}" width="1" height="1" alt="" style="display:none;" />` : ""}
 </body>
 </html>
 `;
