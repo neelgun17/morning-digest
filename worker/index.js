@@ -53,6 +53,7 @@ async function handleResendWebhook(request, env) {
 
       if (date) {
         await appendFeedback(env, date, "- **Read**: email opened");
+        await appendEvent(env, { ts: new Date().toISOString(), kind: "open", date });
       }
     }
 
@@ -110,6 +111,13 @@ async function handleClick(url, env) {
   const cleanSection = sanitize(section, 100);
   const entry = `- **${cleanSection}**: ${reaction}`;
   await appendFeedback(env, date, entry);
+  await appendEvent(env, {
+    ts: new Date().toISOString(),
+    kind: "click",
+    date,
+    section: cleanSection,
+    reaction,
+  });
 
   const label = {
     more_like_this: "More like this",
@@ -244,6 +252,62 @@ async function appendFeedback(env, date, entry, retries = 2) {
       return appendFeedback(env, date, entry, retries - 1);
     }
     console.error("Failed to update feedback-log.md:", await putRes.text());
+  }
+}
+
+// Append one JSON line to data/events.jsonl in the configured GitHub repo.
+// Mirrors the markdown feedback log so the python pipeline has a structured,
+// machine-readable source of truth without changing the human-readable log.
+async function appendEvent(env, event, retries = 2) {
+  const repo = env.GITHUB_REPO;
+  const token = env.GITHUB_TOKEN;
+  const path = "data/events.jsonl";
+  const apiBase = `https://api.github.com/repos/${repo}/contents/${path}`;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github.v3+json",
+    "User-Agent": "morning-digest-feedback",
+  };
+
+  const line = JSON.stringify(event);
+
+  let currentContent = "";
+  let sha = undefined;
+  const getRes = await fetch(apiBase, { headers });
+  if (getRes.ok) {
+    const fileData = await getRes.json();
+    currentContent = decodeURIComponent(escape(atob(fileData.content.replace(/\n/g, ""))));
+    sha = fileData.sha;
+  } else if (getRes.status !== 404) {
+    console.error("Failed to get events.jsonl:", await getRes.text());
+    return;
+  }
+
+  // Idempotent: skip if the exact line is already the last one written.
+  const trimmed = currentContent.replace(/\n+$/, "");
+  if (trimmed.endsWith(line)) {
+    return;
+  }
+
+  const newContent = trimmed ? `${trimmed}\n${line}\n` : `${line}\n`;
+  const body = {
+    message: `Append event for ${event.date} (${event.kind})`,
+    content: btoa(unescape(encodeURIComponent(newContent))),
+  };
+  if (sha) body.sha = sha;
+
+  const putRes = await fetch(apiBase, {
+    method: "PUT",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!putRes.ok) {
+    if (putRes.status === 409 && retries > 0) {
+      console.log(`events.jsonl SHA conflict, retrying (${retries} left)...`);
+      return appendEvent(env, event, retries - 1);
+    }
+    console.error("Failed to update events.jsonl:", await putRes.text());
   }
 }
 
