@@ -58,13 +58,18 @@ cd YOUR_REPO_NAME
 
 ### Step 2 — Edit your interests
 
-Open `interests.md` and replace the examples with your own learning interests. Also customize `sources.yml` with RSS feeds relevant to you. Commit and push:
+The template ships `interests.example.md` and `feedback-log.example.md` as starting templates. In your private repo, copy them to their runtime names (without `.example`), then customize `interests.md` with your own learning interests. Also customize `sources.yml` with RSS feeds relevant to you.
 
 ```bash
-git add interests.md sources.yml
+cp interests.example.md interests.md
+cp feedback-log.example.md feedback-log.md
+# edit interests.md and sources.yml
+git add interests.md feedback-log.md sources.yml
 git commit -m "Customize interests and sources"
 git push
 ```
+
+> **Why the `.example` split?** `interests.md` and `feedback-log.md` are personal — the template is `.gitignore`-ing them so your data never accidentally gets pushed back upstream and so `git merge template/main` never conflicts with your edits.
 
 ### Step 3 — Connect and schedule the agent
 
@@ -158,7 +163,9 @@ The system defaults to a full digest. It only downgrades when there's a real gap
 
 ```
 my-morning-digest/
-  interests.md               ← Your interest profile (edit this)
+  interests.example.md       ← Template stub — copy to interests.md, edit
+  interests.md               ← Your interest profile (gitignored in template)
+  feedback-log.example.md    ← Template stub — copy to feedback-log.md
   feedback-log.md             ← Feedback history (auto-updated by Worker)
   sources.yml                 ← RSS feeds and APIs for content sourcing
   daily/

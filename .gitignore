@@ -1,3 +1,28 @@
 .DS_Store
 worker/.wrangler/
 worker/.dev.vars
+
+# Personal data — created and maintained in the private (downstream) repo only.
+# The template never carries these; gitignoring here prevents accidental seeding
+# and keeps `git fetch template && git merge` clean for downstream users.
+interests.md
+feedback-log.md
+daily/*.md
+!daily/sample-digest.md
+
+# Pipeline data — events log is written by the worker in the private repo;
+# SQLite + ranker artifacts are rebuilt at pipeline runtime.
+data/events.jsonl
+data/digest.db
+data/ranker.pkl
+data/embeddings_cache/
+
+# Eval reports — committed in the private repo per run, not in the template.
+eval/metrics-*.json
+eval/judge-*.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
