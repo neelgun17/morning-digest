@@ -60,6 +60,20 @@ def _apply(cur, ev: dict, counts: dict) -> None:
         counts["skipped"] += 1
         return
 
+    if kind == "impression":
+        # Ranker-emitted: links a specific item_id to a (date, section) slot.
+        item_id = ev.get("item_id")
+        section = ev.get("section") or "unknown"
+        cur.execute(
+            "INSERT OR IGNORE INTO impressions "
+            "(item_id, digest_date, section, position, score) VALUES (?, ?, ?, ?, ?)",
+            (item_id, date, section, ev.get("position"), ev.get("score")),
+        )
+        counts["impressions"] = cur.execute(
+            "SELECT COUNT(*) FROM impressions"
+        ).fetchone()[0]
+        return
+
     section = ev.get("section") or (OPEN_SECTION if kind == "open" else None)
     if section is None:
         counts["skipped"] += 1

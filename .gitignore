@@ -10,9 +10,10 @@ feedback-log.md
 daily/*.md
 !daily/sample-digest.md
 
-# Pipeline data — events log is written by the worker in the private repo;
-# SQLite + ranker artifacts are rebuilt at pipeline runtime.
-data/events.jsonl
+# Pipeline artifacts — SQLite is rebuilt from events.jsonl on every run;
+# ranker.pkl is a binary blob retrained nightly. events.jsonl IS tracked in
+# downstream repos (worker writes it via the GitHub Contents API; pipeline
+# appends impression records).
 data/digest.db
 data/ranker.pkl
 data/embeddings_cache/
