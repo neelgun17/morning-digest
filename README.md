@@ -182,6 +182,46 @@ my-morning-digest/
 
 ---
 
+## How Ranking Works
+
+The agent doesn't browse the web each morning — it reads a pre-ranked
+candidate list produced by a Python pipeline that runs ~30 minutes earlier.
+
+```
+sources.yml ──► pipeline/fetch.py  ──► SQLite
+                pipeline/embed.py  (sentence-transformers MiniLM, 384-dim)
+                                   │
+                                   ▼
+                pipeline/rank.py   ──►  daily/candidates-YYYY-MM-DD.json
+                                                │
+            ┌───────────────────────────────────┴───────────┐
+            ▼                                               ▼
+   trained LogReg (data/ranker.pkl)            cold-start cosine vs interests.md
+   (auto-loaded when ≥50 labels)               (used until enough data accumulates)
+                                   │
+                                   ▼
+                            Claude Code agent
+                       picks 2–3 learning + 3–5 news
+                       writes daily/YYYY-MM-DD.md
+                       writes daily/digest-manifest-…json
+```
+
+**Feedback loop.** When you click a reaction button, the Cloudflare Worker
+appends a structured event to `data/events.jsonl`. The nightly
+`train.yml` workflow joins those reactions to specific items via the
+manifest, retrains the LogReg ranker, and commits `data/ranker.pkl`.
+
+**Two evaluation tracks.** `pipeline/eval.py --metrics` runs leave-one-day-out
+CV (nDCG@5, recall@5, category/source entropy) and gates PRs in CI. The
+weekly `judge.yml` workflow asks Claude Haiku to score each digest 1–5 vs
+your interests, writing `eval/judge-YYYY-MM-DD.json` — an absolute quality
+signal independent of your reaction volume.
+
+See [`eval/README.md`](eval/README.md) for metric definitions and how to
+read the reports.
+
+---
+
 ## Pulling Template Updates
 
 Your repo automatically checks for template updates **daily at 6am UTC** via the `update-template.yml` workflow. When improvements are available (prompt tweaks, email script updates), they're merged automatically. If there's a merge conflict, the workflow will fail and notify you — just resolve it manually.

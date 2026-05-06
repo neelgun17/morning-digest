@@ -2,8 +2,8 @@
 
 Two modes:
   --metrics    Leave-one-day-out CV → nDCG@5, recall@5, topic/source entropy.
-  --llm-judge  Sample recent digests, ask Claude Haiku to score them vs
-               interests.md. Implemented in Step 6.
+  --llm-judge  Sample recent digests, ask Claude Haiku to score them against
+               interests.md. (Implementation lives in pipeline/judge.py.)
 
 Output goes to eval/metrics-YYYY-MM-DD.json (per-run) and eval/baseline.json
 (latest-on-main result, used by CI as the regression bar).
@@ -184,23 +184,33 @@ def main(argv: list[str] | None = None) -> int:
                    help="overwrite eval/baseline.json with the current result")
     p.add_argument("--check", action="store_true",
                    help="exit non-zero if nDCG@5 regressed beyond tolerance")
+    p.add_argument("--llm-judge", action="store_true",
+                   help="score recent digests with Claude Haiku, write eval/judge-DATE.json")
+    p.add_argument("--n", type=int, default=7,
+                   help="how many recent digests to judge (default 7)")
     args = p.parse_args(argv)
 
-    if not (args.metrics or args.check or args.update_baseline):
-        p.error("specify at least one of --metrics, --check, --update-baseline")
+    if not (args.metrics or args.check or args.update_baseline or args.llm_judge):
+        p.error("specify at least one of --metrics, --check, --update-baseline, --llm-judge")
 
-    result = run_metrics(write=args.metrics)
-    print(json.dumps(result.get("macro", {}), indent=2))
+    if args.llm_judge:
+        from . import judge
+        summary = judge.run(n=args.n)
+        print(json.dumps({k: v for k, v in summary.items() if k != "digests"}, indent=2))
 
-    if args.update_baseline:
-        EVAL_DIR.mkdir(parents=True, exist_ok=True)
-        BASELINE_PATH.write_text(json.dumps(result, indent=2), encoding="utf-8")
-        print(f"updated baseline: {BASELINE_PATH.relative_to(db.REPO_ROOT)}")
+    if args.metrics or args.check or args.update_baseline:
+        result = run_metrics(write=args.metrics)
+        print(json.dumps(result.get("macro", {}), indent=2))
 
-    if args.check:
-        ok, msg = check_against_baseline(result)
-        print(f"::notice::{msg}" if ok else f"::error::{msg}")
-        return 0 if ok else 1
+        if args.update_baseline:
+            EVAL_DIR.mkdir(parents=True, exist_ok=True)
+            BASELINE_PATH.write_text(json.dumps(result, indent=2), encoding="utf-8")
+            print(f"updated baseline: {BASELINE_PATH.relative_to(db.REPO_ROOT)}")
+
+        if args.check:
+            ok, msg = check_against_baseline(result)
+            print(f"::notice::{msg}" if ok else f"::error::{msg}")
+            return 0 if ok else 1
     return 0
 
 
