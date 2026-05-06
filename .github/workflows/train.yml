@@ -1,0 +1,52 @@
+name: Train ranker
+
+# Nightly training pass over accumulated impressions + reactions.
+# If <50 labels exist, the script no-ops (rank.py keeps using cold-start).
+# Output: data/ranker.pkl committed back to the repo.
+
+on:
+  schedule:
+    - cron: "0 7 * * *"   # 07:00 UTC nightly
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Cache sentence-transformers model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/torch/sentence_transformers
+          key: st-MiniLM-L6-v2
+
+      - name: Install deps
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Train
+        run: python -m pipeline.train
+
+      - name: Commit ranker.pkl
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # ranker.pkl is gitignored by default — force-add since this workflow
+          # is the only writer and we want it tracked downstream for the next
+          # pipeline run to pick up.
+          git add -f data/ranker.pkl 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "::notice::No model update (likely <50 labels yet)."
+          else
+            git commit -m "Retrain ranker $(date -u +%F)"
+            git pull --rebase origin "${{ github.ref_name }}" || true
+            git push
+          fi

@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import db, embed
+from . import db, embed, features
 
 LEARNING_K = 8
 NEWS_K = 10
@@ -82,6 +82,7 @@ def score_items(
     conn: sqlite3.Connection,
     interests: list[str],
     today: str,
+    model_bundle: dict | None = None,
 ) -> list[dict]:
     rows = conn.execute(
         "SELECT id, url, source, category, title, summary, published_at, embedding "
@@ -96,12 +97,31 @@ def score_items(
     top_sim = sims.max(axis=1)
     top_interest = sims.argmax(axis=1)
 
+    use_model = bool(model_bundle and model_bundle.get("model"))
+    if use_model:
+        stats: features.Stats = model_bundle["stats"]
+        model = model_bundle["model"]
+        feats = []
+        for (_, _, source, category, _, _, published_at, _), vec in zip(rows, cand_vecs):
+            feats.append(features.vectorize(
+                vec, interest_vecs, _hours_since(published_at),
+                source, category, stats,
+            ))
+        probs = model.predict_proba(np.vstack(feats))[:, 1]
+    else:
+        probs = None
+
     out = []
-    for (id_, url, source, category, title, summary, published_at, _), s, i in zip(
-        rows, top_sim, top_interest
+    for idx, ((id_, url, source, category, title, summary, published_at, _), s, i) in enumerate(
+        zip(rows, top_sim, top_interest)
     ):
         hours = _hours_since(published_at)
-        score = float(s) * _recency_factor(hours)
+        if probs is not None:
+            score = float(probs[idx]) * _recency_factor(hours)
+            generator = "trained-logreg"
+        else:
+            score = float(s) * _recency_factor(hours)
+            generator = "cold-start-cosine"
         out.append({
             "id": id_,
             "url": url,
@@ -114,6 +134,7 @@ def score_items(
             "sim": round(float(s), 4),
             "age_hours": round(hours, 1),
             "reason": f"matches interest: {interests[i][:80]}",
+            "_generator": generator,
         })
     out.sort(key=lambda x: x["score"], reverse=True)
     return out
@@ -156,11 +177,12 @@ def log_impressions(events_path: Path, today: str, sections: dict) -> None:
                 }, sort_keys=True) + "\n")
 
 
-def write_candidates(out_path: Path, today: str, sections: dict) -> None:
+def write_candidates(out_path: Path, today: str, sections: dict,
+                     generator: str = "cold-start-cosine-v1") -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "date": today,
-        "generator": "cold-start-cosine-v1",
+        "generator": generator,
         "learning": sections["learning"],
         "news": sections["news"],
     }
@@ -170,15 +192,32 @@ def write_candidates(out_path: Path, today: str, sections: dict) -> None:
 def run(conn: sqlite3.Connection, today: str | None = None) -> dict:
     today = today or datetime.now(timezone.utc).date().isoformat()
     interests = parse_interests()
-    scored = score_items(conn, interests, today)
+    model_bundle = _try_load_model()
+    scored = score_items(conn, interests, today, model_bundle=model_bundle)
     sections = split_sections(scored)
     out_path = db.REPO_ROOT / "daily" / f"candidates-{today}.json"
-    write_candidates(out_path, today, sections)
+    write_candidates(out_path, today, sections, generator=_generator_tag(scored))
     log_impressions(db.REPO_ROOT / "data" / "events.jsonl", today, sections)
     return {
         "interests": len(interests),
         "scored": len(scored),
         "learning": len(sections["learning"]),
         "news": len(sections["news"]),
+        "model": _generator_tag(scored),
         "out": str(out_path.relative_to(db.REPO_ROOT)),
     }
+
+
+def _try_load_model() -> dict | None:
+    # Lazy import to avoid a circular import (train imports rank).
+    try:
+        from . import train
+        return train.load_model()
+    except Exception:
+        return None
+
+
+def _generator_tag(scored: list[dict]) -> str:
+    if scored and scored[0].get("_generator") == "trained-logreg":
+        return "trained-logreg-v1"
+    return "cold-start-cosine-v1"

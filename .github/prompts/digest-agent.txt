@@ -70,7 +70,22 @@ Generate a **catch-up digest**:
 
 8. Every link must be real and from a reputable source.
 
-9. Commit and push with message: "Add daily digest for YYYY-MM-DD"
+9. **Write a digest manifest** at `daily/digest-manifest-YYYY-MM-DD.json` mapping each `### N. Title` section to the `id` of the candidate item you used, plus a stub for the news block (item_id can be null for News). This lets the trainer join feedback reactions back to specific items. Format:
+
+   ```json
+   {
+     "date": "YYYY-MM-DD",
+     "items": [
+       {"section": "1. <exact section title from your digest>", "item_id": "<id from candidates JSON>"},
+       {"section": "2. <...>", "item_id": "<id>"},
+       {"section": "News", "item_id": null}
+     ]
+   }
+   ```
+
+   The `section` strings must match the digest's `### N. Title` lines exactly (without the `### ` prefix or `(X min read)` parenthetical) so feedback URLs join correctly.
+
+10. Commit and push with message: "Add daily digest for YYYY-MM-DD"
 
 ## Important
 - Every link must be real and from a reputable source
