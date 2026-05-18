@@ -47,31 +47,26 @@ See what a digest looks like: [`daily/sample-digest.md`](daily/sample-digest.md)
 
 ### Step 1 — Create your repo
 
-Click **"Use this template"** at the top of this page → **Create a new repository** (make it private).
-
-Then clone it locally:
+Click **"Use this template"** at the top of this page → **Create a new repository** (make it private), then clone it:
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
 cd YOUR_REPO_NAME
 ```
 
-### Step 2 — Edit your interests
-
-The template ships `interests.example.md` and `feedback-log.example.md` as starting templates. In your private repo, copy them to their runtime names (without `.example`), then customize `interests.md` with your own learning interests. Also customize `sources.yml` with RSS feeds relevant to you.
+### Step 2 — Run the setup script
 
 ```bash
-cp interests.example.md interests.md
-cp feedback-log.example.md feedback-log.md
-# edit interests.md and sources.yml
-git add interests.md feedback-log.md sources.yml
-git commit -m "Customize interests and sources"
-git push
+./scripts/setup.sh
 ```
 
-> **Why the `.example` split?** `interests.md` and `feedback-log.md` are personal — the template is `.gitignore`-ing them so your data never accidentally gets pushed back upstream and so `git merge template/main` never conflicts with your edits.
+This walks you through everything: prerequisite checks, GitHub auth, seeding `interests.md`, setting Resend/email secrets, deploying the Cloudflare Worker (optional), generating the feedback secret, and flipping workflow permissions. It's idempotent — safe to re-run.
 
-### Step 3 — Connect and schedule the agent
+When it finishes, run `./scripts/verify.sh` anytime to confirm everything is wired up correctly.
+
+> Prefer to do it by hand? The manual steps are documented in [`docs/manual-setup.md`](docs/manual-setup.md).
+
+### Step 3 — Schedule the agent
 
 > **Important:** This project uses **Claude Code scheduled triggers** — the agent runs on Anthropic's cloud for free. No GitHub Actions workflow or Anthropic API key needed.
 
@@ -94,44 +89,11 @@ Use the prompt from .github/prompts/digest-agent.txt
 
 The full agent prompt lives in [`.github/prompts/digest-agent.txt`](.github/prompts/digest-agent.txt) — edit it anytime to change how your digest is generated.
 
-### Step 4 — Set up email delivery (optional but recommended)
+### Email and feedback buttons
 
-This sends your digest as an HTML email with one-click feedback buttons.
+Email delivery (Resend) and one-click feedback (Cloudflare Worker) are configured by `scripts/setup.sh` in Step 2 — there's nothing extra to do here unless you skipped them.
 
-**a) Email via Resend:**
-
-1. Sign up at [resend.com](https://resend.com) (free tier: 3,000 emails/month)
-2. Get your API key
-3. Add these secrets to your GitHub repo (Settings → Secrets → Actions):
-   - `RESEND_API_KEY` — your Resend API key
-   - `EMAIL_TO` — your email address
-   - `EMAIL_FROM` — (optional) defaults to `Morning Digest <digest@resend.dev>`
-
-The GitHub Action at `.github/workflows/email-digest.yml` fires automatically when the agent pushes a new digest.
-
-**b) One-click feedback via Cloudflare Worker:**
-
-1. Install [Wrangler](https://developers.cloudflare.com/workers/wrangler/install-and-update/): `npm install -g wrangler`
-2. Log in: `wrangler login`
-3. Deploy:
-
-```bash
-cd worker
-npx wrangler deploy
-npx wrangler secret put GITHUB_TOKEN
-# paste a GitHub personal access token with repo write access
-npx wrangler secret put GITHUB_REPO
-# paste your username/repo-name (e.g. janedoe/my-morning-digest)
-npx wrangler secret put FEEDBACK_SECRET
-# paste a random string (e.g. run: openssl rand -hex 32)
-```
-
-4. Copy the Worker URL (e.g., `https://morning-digest-feedback.yourname.workers.dev`)
-5. Add these as GitHub repo secrets:
-   - `FEEDBACK_URL` — your Worker URL
-   - `FEEDBACK_SECRET` — the same random string you used above
-
-Now each section in your email gets these reaction buttons:
+Each section in your email gets these reaction buttons:
 
 | Button | What it tells the system |
 |--------|------------------------|
