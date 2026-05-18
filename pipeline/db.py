@@ -27,9 +27,12 @@ CREATE TABLE IF NOT EXISTS items (
     cluster_id   INTEGER
 );
 
+-- impressions.item_id is intentionally NOT a FOREIGN KEY: an event-log
+-- replay can reference items that were dedupe'd out or haven't been
+-- re-fetched yet. The join is done lazily in train.py with a NULL check.
 CREATE TABLE IF NOT EXISTS impressions (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_id      TEXT REFERENCES items(id),
+    item_id      TEXT,
     digest_date  TEXT NOT NULL,
     section      TEXT NOT NULL,
     position     INTEGER,
