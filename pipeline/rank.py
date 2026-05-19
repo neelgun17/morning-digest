@@ -19,10 +19,11 @@ from pathlib import Path
 
 import numpy as np
 
-from . import db, embed, features
+from . import db, embed, extract, features, rerank
 
 LEARNING_K = 8
 NEWS_K = 10
+STAGE1_TOP_K = 30                # oversample for stage 2 to re-order
 RECENCY_HALF_LIFE_HOURS = 36.0
 NEWS_CATEGORIES = {"news", "finance"}
 
@@ -190,10 +191,29 @@ def write_candidates(out_path: Path, today: str, sections: dict,
 
 
 def run(conn: sqlite3.Connection, today: str | None = None) -> dict:
+    import asyncio
     today = today or datetime.now(timezone.utc).date().isoformat()
     interests = parse_interests()
     model_bundle = _try_load_model()
+
+    # Stage 1 — score everything with the cheap ranker.
     scored = score_items(conn, interests, today, model_bundle=model_bundle)
+
+    # Stage 2 — fetch bodies + Haiku rerank for the top STAGE1_TOP_K only.
+    stage2_summary: dict = {"available": rerank.is_available()}
+    if scored and rerank.is_available():
+        coarse_top = scored[:STAGE1_TOP_K]
+        fetch_counts = asyncio.run(
+            extract.fetch_bodies_for_items(conn, [it["id"] for it in coarse_top])
+        )
+        bodies = extract.get_bodies(conn, [it["id"] for it in coarse_top])
+        reranked = asyncio.run(rerank.rerank(coarse_top, interests, bodies))
+        stage2_summary.update(fetch_counts)
+        stage2_summary["reranked"] = sum(1 for it in reranked if "rerank_score" in it)
+        stage2_summary["rerank_skipped"] = sum(1 for it in reranked if it.get("rerank_failed"))
+        scored = _apply_stage2(reranked) + scored[STAGE1_TOP_K:]
+        scored.sort(key=lambda x: x["score"], reverse=True)
+
     sections = split_sections(scored)
     out_path = db.REPO_ROOT / "daily" / f"candidates-{today}.json"
     write_candidates(out_path, today, sections, generator=_generator_tag(scored))
@@ -204,8 +224,24 @@ def run(conn: sqlite3.Connection, today: str | None = None) -> dict:
         "learning": len(sections["learning"]),
         "news": len(sections["news"]),
         "model": _generator_tag(scored),
+        "stage2": stage2_summary,
         "out": str(out_path.relative_to(db.REPO_ROOT)),
     }
+
+
+def _apply_stage2(reranked: list[dict]) -> list[dict]:
+    """Replace stage-1 score with rerank_score × recency; swap in LLM summary."""
+    out = []
+    for it in reranked:
+        if "rerank_score" in it:
+            score = (it["rerank_score"] / 10.0) * _recency_factor(it["age_hours"])
+            out.append({**it,
+                        "score": round(score, 4),
+                        "summary": it["rerank_summary"],
+                        "_generator": "haiku-rerank"})
+        else:
+            out.append(it)  # keep stage-1 fallback unchanged
+    return out
 
 
 def _try_load_model() -> dict | None:
@@ -218,6 +254,8 @@ def _try_load_model() -> dict | None:
 
 
 def _generator_tag(scored: list[dict]) -> str:
+    if scored and scored[0].get("_generator") == "haiku-rerank":
+        return "haiku-rerank-v1"
     if scored and scored[0].get("_generator") == "trained-logreg":
         return "trained-logreg-v1"
     return "cold-start-cosine-v1"

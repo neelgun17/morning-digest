@@ -39,6 +39,7 @@ jobs:
       - name: Run pipeline
         env:
           PIPELINE_DATE: ${{ inputs.date }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           if [ -n "$PIPELINE_DATE" ]; then
             python -m pipeline.run --date "$PIPELINE_DATE"

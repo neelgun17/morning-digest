@@ -15,16 +15,18 @@ EVENTS_PATH = REPO_ROOT / "data" / "events.jsonl"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
-    id           TEXT PRIMARY KEY,
-    url          TEXT NOT NULL,
-    source       TEXT,
-    category     TEXT,
-    title        TEXT,
-    summary      TEXT,
-    published_at TEXT,
-    fetched_at   TEXT,
-    embedding    BLOB,
-    cluster_id   INTEGER
+    id              TEXT PRIMARY KEY,
+    url             TEXT NOT NULL,
+    source          TEXT,
+    category        TEXT,
+    title           TEXT,
+    summary         TEXT,
+    published_at    TEXT,
+    fetched_at      TEXT,
+    embedding       BLOB,
+    cluster_id      INTEGER,
+    body            TEXT,
+    body_fetched_at TEXT
 );
 
 -- impressions.item_id is intentionally NOT a FOREIGN KEY: an event-log
@@ -64,7 +66,17 @@ def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _migrate(conn)
     conn.commit()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Idempotent ALTER TABLEs for schema changes against existing DBs."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(items)").fetchall()}
+    if "body" not in cols:
+        conn.execute("ALTER TABLE items ADD COLUMN body TEXT")
+    if "body_fetched_at" not in cols:
+        conn.execute("ALTER TABLE items ADD COLUMN body_fetched_at TEXT")
 
 
 def reset(path: Path | str = DB_PATH) -> sqlite3.Connection:

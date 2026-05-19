@@ -154,19 +154,29 @@ sources.yml ──► pipeline/fetch.py  ──► SQLite
                 pipeline/embed.py  (sentence-transformers MiniLM, 384-dim)
                                    │
                                    ▼
+                ─── STAGE 1: coarse recall over ~250 items ───
+                trained LogReg (≥50 labels) OR cold-start cosine vs interests.md
+                                   │
+                                   ▼  top 30
+                ─── STAGE 2: precision rerank ───
+                pipeline/extract.py  ──► httpx + trafilatura → article body (cached)
+                pipeline/rerank.py   ──► Claude Haiku per item
+                                          {relevance 1–10, personalized summary}
+                                   │
+                                   ▼  score = rerank × recency
                 pipeline/rank.py   ──►  daily/candidates-YYYY-MM-DD.json
                                                 │
-            ┌───────────────────────────────────┴───────────┐
-            ▼                                               ▼
-   trained LogReg (data/ranker.pkl)            cold-start cosine vs interests.md
-   (auto-loaded when ≥50 labels)               (used until enough data accumulates)
-                                   │
-                                   ▼
-                            Claude Code agent
-                       picks 2–3 learning + 3–5 news
-                       writes daily/YYYY-MM-DD.md
-                       writes daily/digest-manifest-…json
+                                                ▼
+                                         Claude Code agent
+                                    picks 2–3 learning + 3–5 news
+                                    uses Haiku-written summaries verbatim
+                                    writes daily/YYYY-MM-DD.md
+                                    writes daily/digest-manifest-…json
 ```
+
+Stage 2 needs the `ANTHROPIC_API_KEY` secret; without it the pipeline
+gracefully skips reranking and falls back to stage-1-only output with
+RSS-scraped summaries.
 
 **Feedback loop.** When you click a reaction button, the Cloudflare Worker
 appends a structured event to `data/events.jsonl`. The nightly
