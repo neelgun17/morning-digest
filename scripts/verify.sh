@@ -48,6 +48,21 @@ if [[ "$perm" == "write" ]]; then ok "read+write (template sync OK)"
 else warn "permissions=$perm — template auto-sync will fail to push"
 fi
 
+bold "Worker liveness"
+# FEEDBACK_URL is a secret and GitHub never returns secret values, so we can't
+# auto-discover it. Export MORNING_DIGEST_WORKER_URL=https://...workers.dev to probe.
+probe_url="${MORNING_DIGEST_WORKER_URL:-}"
+if [[ -n "$probe_url" ]]; then
+  code="$(curl -sS -o /dev/null -w '%{http_code}' "$probe_url/click" --max-time 10 || echo 000)"
+  case "$code" in
+    401) ok "worker live ($probe_url → 401 without token, as expected)" ;;
+    000) err "worker unreachable at $probe_url"; fail=1 ;;
+    *)   warn "worker returned HTTP $code (expected 401)" ;;
+  esac
+else
+  warn "set MORNING_DIGEST_WORKER_URL=https://...workers.dev to probe the worker"
+fi
+
 bold "Recent workflow runs"
 gh run list --repo "$REPO_SLUG" --limit 5 --json workflowName,status,conclusion,createdAt \
   -q '.[] | "  \(.conclusion // .status)\t\(.workflowName)\t\(.createdAt)"' 2>/dev/null \

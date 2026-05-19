@@ -116,20 +116,63 @@ else
   warn "  https://github.com/$REPO_SLUG/settings/actions"
 fi
 
-bold "6/6  Smoke-test"
+bold "6/6  Smoke tests"
 warn "interests.md and feedback-log.md stay local (.gitignored by design)."
 
-if yesno "Trigger the email-digest workflow now as a smoke test?" n; then
-  if [[ -d daily ]] && ls daily/*.md >/dev/null 2>&1; then
-    gh workflow run email-digest.yml --repo "$REPO_SLUG" || warn "workflow_dispatch may not be wired; that's fine."
-    ok "smoke test dispatched. Watch: gh run watch --repo $REPO_SLUG"
-  else
-    warn "No digest in daily/ yet — smoke test deferred until first agent run."
+# Worker probe — hit the deployed Worker with no token; expect 401 (proves it's live and auth-gated).
+if [[ -n "${WORKER_URL:-}" ]]; then
+  code="$(curl -sS -o /dev/null -w '%{http_code}' "$WORKER_URL/click" --max-time 10 || echo 000)"
+  case "$code" in
+    401) ok "worker responding (401 without token, as expected)" ;;
+    000) warn "worker unreachable at $WORKER_URL — check 'wrangler deployments list'" ;;
+    *)   warn "worker returned HTTP $code (expected 401). It may still work, but auth is misconfigured." ;;
+  esac
+fi
+
+# Resend probe — send a real test email.
+if [[ -n "${RESEND_KEY:-}" && -n "${EMAIL_TO:-}" ]]; then
+  if yesno "Send a test email via Resend now?" y; then
+    if command -v jq >/dev/null 2>&1; then
+      body="$(jq -nc --arg from "$EMAIL_FROM" --arg to "$EMAIL_TO" \
+        '{from:$from, to:[$to], subject:"Morning Digest — setup test",
+          html:"<p>If you see this, your Resend + GitHub secrets are wired up correctly.</p>"}')"
+    else
+      # Fallback: only \" is escaped. OK for typical email/name inputs.
+      body="$(printf '{"from":%s,"to":[%s],"subject":"Morning Digest — setup test","html":"<p>If you see this, your Resend + GitHub secrets are wired up correctly.</p>"}' \
+        "\"${EMAIL_FROM//\"/\\\"}\"" "\"${EMAIL_TO//\"/\\\"}\"")"
+    fi
+    resp="$(curl -sS -o /tmp/morning-digest-resend.json -w '%{http_code}' \
+      -X POST https://api.resend.com/emails \
+      -H "Authorization: Bearer $RESEND_KEY" \
+      -H "Content-Type: application/json" \
+      -d "$body" || echo 000)"
+    if [[ "$resp" =~ ^2[0-9]{2}$ ]]; then
+      ok "test email sent to $EMAIL_TO — check your inbox"
+    else
+      warn "Resend returned HTTP $resp. Response:"; cat /tmp/morning-digest-resend.json; printf '\n'
+    fi
   fi
 fi
 
 printf "\n"
 bold "Setup complete."
+
+SCHEDULE_PROMPT="Create a scheduled trigger called \"morning-digest\" that runs daily at 7am my time.
+Repo: https://github.com/$REPO_SLUG
+Tools needed: Bash, Read, Write, Edit, Glob, Grep, WebSearch
+Use the prompt from .github/prompts/digest-agent.txt"
+
+clip_cmd=""
+if command -v pbcopy   >/dev/null 2>&1; then clip_cmd="pbcopy"
+elif command -v wl-copy >/dev/null 2>&1; then clip_cmd="wl-copy"
+elif command -v xclip   >/dev/null 2>&1; then clip_cmd="xclip -selection clipboard"
+fi
+
+if [[ -n "$clip_cmd" ]]; then
+  printf '%s' "$SCHEDULE_PROMPT" | eval "$clip_cmd"
+  ok "/schedule prompt copied to clipboard"
+fi
+
 cat <<EOF
 
 Next: schedule the Claude Code agent.
@@ -139,12 +182,9 @@ Next: schedule the Claude Code agent.
 
   2. In Claude Code, run:  /schedule
 
-  3. Paste this prompt:
+  3. Paste this prompt (already on your clipboard if pbcopy/xclip/wl-copy was available):
 
-       Create a scheduled trigger called "morning-digest" that runs daily at 7am my time.
-       Repo: https://github.com/$REPO_SLUG
-       Tools needed: Bash, Read, Write, Edit, Glob, Grep, WebSearch
-       Use the prompt from .github/prompts/digest-agent.txt
+$(printf '%s\n' "$SCHEDULE_PROMPT" | sed 's/^/       /')
 
 Verify health anytime:  scripts/verify.sh
 EOF
