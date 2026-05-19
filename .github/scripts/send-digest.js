@@ -1,5 +1,67 @@
 const fs = require("fs");
+const path = require("path");
 const { marked } = require("marked");
+
+const REPO_ROOT = path.join(__dirname, "..", "..");
+const UPDATE_REPO = "neelgun17/morning-digest";
+const UPDATE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function parseSemver(tag) {
+  const m = String(tag).trim().replace(/^v/, "").match(/^(\d+)\.(\d+)\.(\d+)/);
+  return m ? [+m[1], +m[2], +m[3]] : null;
+}
+
+function semverGreater(a, b) {
+  const x = parseSemver(a), y = parseSemver(b);
+  if (!x || !y) return false;
+  for (let i = 0; i < 3; i++) {
+    if (x[i] !== y[i]) return x[i] > y[i];
+  }
+  return false;
+}
+
+async function checkForUpdate() {
+  if (process.env.MORNING_DIGEST_UPDATE_CHECK === "0") return null;
+  try {
+    const versionFile = path.join(REPO_ROOT, "VERSION");
+    if (!fs.existsSync(versionFile)) return null;
+    const local = fs.readFileSync(versionFile, "utf-8").trim();
+    if (!parseSemver(local)) return null;
+
+    const cachePath = path.join(REPO_ROOT, ".cache", "update_check.json");
+    let latest = null;
+    try {
+      const c = JSON.parse(fs.readFileSync(cachePath, "utf-8"));
+      if (c && c.fetched_at && Date.now() - c.fetched_at < UPDATE_CACHE_TTL_MS) {
+        latest = { tag: c.tag, url: c.url };
+      }
+    } catch { /* no/invalid cache, refetch */ }
+
+    if (!latest) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 2000);
+      try {
+        const res = await fetch(
+          `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`,
+          { headers: { "User-Agent": "morning-digest", "Accept": "application/vnd.github+json" }, signal: ctrl.signal },
+        );
+        if (!res.ok) return null;
+        const data = await res.json();
+        latest = { tag: data.tag_name, url: data.html_url };
+        try {
+          fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+          fs.writeFileSync(cachePath, JSON.stringify({ fetched_at: Date.now(), ...latest }));
+        } catch { /* cache write failures shouldn't break the email */ }
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    return semverGreater(latest.tag, local) ? { local, tag: latest.tag, url: latest.url } : null;
+  } catch {
+    return null;
+  }
+}
 
 const file = process.argv[2];
 const date = process.argv[3];
@@ -117,8 +179,15 @@ if (FEEDBACK_URL) {
   `;
 }
 
-// Wrap in email template
-const html = `
+// Extract title from first H1
+const titleMatch = markdown.match(/^# (.+)$/m);
+const subject = titleMatch ? titleMatch[1] : `Morning Digest — ${date}`;
+
+function buildHtml(htmlBody, update) {
+  const updateLine = update
+    ? ` · <a href="${update.url}" style="color:#999;">Update available: ${update.tag}</a>`
+    : "";
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -152,18 +221,17 @@ const html = `
   ${htmlBody}
   <hr>
   <p style="font-size:12px;color:#999;text-align:center;">
-    Morning Digest · <a href="https://github.com/neelgun17/morning-digest" style="color:#999;">How this works</a>
+    Morning Digest · <a href="https://github.com/neelgun17/morning-digest" style="color:#999;">How this works</a>${updateLine}
   </p>
 </body>
 </html>
 `;
-
-// Extract title from first H1
-const titleMatch = markdown.match(/^# (.+)$/m);
-const subject = titleMatch ? titleMatch[1] : `Morning Digest — ${date}`;
+}
 
 // Send via Resend
 async function send() {
+  const update = await checkForUpdate();
+  const html = buildHtml(htmlBody, update);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {

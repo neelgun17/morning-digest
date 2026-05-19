@@ -27,3 +27,6 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+
+# Update-check cache for the email footer (regenerated daily).
+.cache/
