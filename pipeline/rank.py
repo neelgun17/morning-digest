@@ -10,6 +10,7 @@ which 2-3 to actually feature.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import re
@@ -191,7 +192,6 @@ def write_candidates(out_path: Path, today: str, sections: dict,
 
 
 def run(conn: sqlite3.Connection, today: str | None = None) -> dict:
-    import asyncio
     today = today or datetime.now(timezone.utc).date().isoformat()
     interests = parse_interests()
     model_bundle = _try_load_model()
@@ -203,10 +203,9 @@ def run(conn: sqlite3.Connection, today: str | None = None) -> dict:
     stage2_summary: dict = {"available": rerank.is_available()}
     if scored and rerank.is_available():
         coarse_top = scored[:STAGE1_TOP_K]
-        fetch_counts = asyncio.run(
+        fetch_counts, bodies = asyncio.run(
             extract.fetch_bodies_for_items(conn, [it["id"] for it in coarse_top])
         )
-        bodies = extract.get_bodies(conn, [it["id"] for it in coarse_top])
         reranked = asyncio.run(rerank.rerank(coarse_top, interests, bodies))
         stage2_summary.update(fetch_counts)
         stage2_summary["reranked"] = sum(1 for it in reranked if "rerank_score" in it)

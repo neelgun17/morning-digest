@@ -55,15 +55,19 @@ async def fetch_bodies_for_items(
     conn: sqlite3.Connection,
     item_ids: list[str],
     extract_fn: Callable[[str], str | None] = _trafilatura_extract,
-) -> dict:
-    """Fetch + cache bodies for items not already in the DB. Returns counts."""
+) -> tuple[dict, dict[str, str]]:
+    """Fetch + cache bodies for items not already in the DB.
+
+    Returns (counts, bodies) — counts has requested/cached/fetched/failed,
+    bodies maps item_id to the body text (cached + freshly fetched).
+    """
     cur = conn.cursor()
     rows = cur.execute(
         f"SELECT id, url, body FROM items WHERE id IN ({','.join('?' * len(item_ids))})",
         item_ids,
     ).fetchall() if item_ids else []
 
-    cached = sum(1 for _, _, body in rows if body)
+    bodies: dict[str, str] = {id_: body for id_, _, body in rows if body}
     to_fetch = [(id_, url) for id_, url, body in rows if not body]
     fetched = 0
 
@@ -78,17 +82,21 @@ async def fetch_bodies_for_items(
             results = await asyncio.gather(*[one(client, i, u) for i, u in to_fetch])
 
         now = datetime.now(timezone.utc).isoformat()
+        updates = [(body, now, id_) for id_, body in results if body]
+        if updates:
+            cur.executemany(
+                "UPDATE items SET body = ?, body_fetched_at = ? WHERE id = ?",
+                updates,
+            )
+            conn.commit()
         for id_, body in results:
             if body:
-                cur.execute(
-                    "UPDATE items SET body = ?, body_fetched_at = ? WHERE id = ?",
-                    (body, now, id_),
-                )
+                bodies[id_] = body
                 fetched += 1
-        conn.commit()
 
-    return {"requested": len(item_ids), "cached": cached, "fetched": fetched,
-            "failed": len(to_fetch) - fetched}
+    counts = {"requested": len(item_ids), "cached": len(bodies) - fetched,
+              "fetched": fetched, "failed": len(to_fetch) - fetched}
+    return counts, bodies
 
 
 def get_bodies(conn: sqlite3.Connection, item_ids: list[str]) -> dict[str, str]:

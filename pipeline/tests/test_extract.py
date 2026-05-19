@@ -65,13 +65,16 @@ def test_fetch_bodies_for_items_caches_and_writes(tmp_path, monkeypatch):
                               request=httpx.Request("GET", url))
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
 
-    counts = asyncio.run(extract.fetch_bodies_for_items(
+    counts, bodies = asyncio.run(extract.fetch_bodies_for_items(
         conn, ["a", "b"], extract_fn=lambda h: h[:30]))
     assert counts == {"requested": 2, "cached": 1, "fetched": 1, "failed": 0}
-
-    bodies = extract.get_bodies(conn, ["a", "b"])
     assert bodies["b"] == "already cached body"
     assert "fresh fetch" in bodies["a"]
+
+    # get_bodies (still used elsewhere) returns the same view from disk
+    persisted = extract.get_bodies(conn, ["a", "b"])
+    assert persisted["b"] == "already cached body"
+    assert "fresh fetch" in persisted["a"]
 
 
 def test_get_bodies_skips_items_without_body(tmp_path):

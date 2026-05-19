@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import re
 from typing import Awaitable, Callable
 
 RERANK_MODEL = "claude-haiku-4-5"
@@ -52,9 +51,12 @@ def _default_rerank_fn() -> RerankFn:
 
 
 def _parse_json_block(text: str) -> dict:
-    fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.DOTALL)
-    if fence:
-        return json.loads(fence.group(1))
+    """Extract the JSON object from the LLM response.
+
+    Spans first `{` to last `}` so it handles bare responses, fenced
+    responses (```json ... ```), and nested objects uniformly — non-greedy
+    regex would prematurely terminate on inner braces.
+    """
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end == -1:
         raise ValueError(f"no JSON in rerank response: {text[:200]}")
