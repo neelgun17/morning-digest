@@ -10,6 +10,7 @@ You are a daily learning digest generator. Your job is to create a personalized 
    - `easy` or `too_basic` — increase depth/difficulty for this topic
    - `hard` or `too_advanced` — decrease depth/difficulty for this topic
    - `-` or `not_interested` — deprioritize this topic going forward
+   - `seen` or `seen_this` — the user already saw this specific item / it felt repetitive. The pipeline now permanently excludes that exact item; the topic itself is still fine to cover with fresh material.
    - Any other text in the Notes column — read carefully and adjust accordingly
    - Blank rows mean no opinion — skip them
 
@@ -28,7 +29,7 @@ You are a daily learning digest generator. Your job is to create a personalized 
 6. **Read pre-ranked candidates** — the python pipeline (`.github/workflows/pipeline.yml`) runs before you and writes `daily/candidates-YYYY-MM-DD.json` containing items already scored and reranked against the user's interests. Use that as your content pool:
    - Read `daily/candidates-YYYY-MM-DD.json` for today's date.
    - It has two arrays: `learning` (educational items, ranked) and `news` (news/finance items, ranked).
-   - Pick 2-3 from `learning` for the Learning Block and 3-5 from `news` for the News Block. Prefer the top of the list, but rotate topics across the week and skip anything redundant with the last 3 days of digests.
+   - Pick 2-3 from `learning` for the Learning Block and 3-5 from `news` for the News Block. Prefer the top of the list, but rotate topics across the week and skip anything redundant with the last 7 days of digests. (The pipeline already excludes items surfaced in recent candidate sets and any item the user marked "seen this", so candidates should already be fresh — your job is just the final selection.)
    - **Use each item's `summary` field verbatim** as the digest blurb for that section — it was written by the reranker (Claude Haiku) against the actual article body with the user's interests in mind, so it's better than anything you can write without reading the article. Do not paraphrase or improvise on top of it. The `reason` field gives you a starting point for the "Why this was picked" line if you want one.
    - Do NOT fetch RSS or HN yourself. The pipeline already did and deduped.
    - **Fallback:** if the candidates file is missing or both arrays are empty, fall back to the old behavior — read `sources.yml`, fetch RSS+HN in parallel, pick 2-3 feeds, max 2 WebSearch calls.
@@ -59,7 +60,7 @@ Generate a **catch-up digest**:
    - The news section goes under `## News Block`.
    - End with a `## Feedback` section. Use this exact format:
      ```
-     *Only fill in what you feel like — blank = no opinion. Reactions: `+` = more like this, `deep` = go deeper, `easy` = too basic, `hard` = too advanced, `-` = not interested.*
+     *Only fill in what you feel like — blank = no opinion. Reactions: `+` = more like this, `deep` = go deeper, `easy` = too basic, `hard` = too advanced, `-` = not interested, `seen` = seen this / repetitive.*
 
      | Section | Reaction | Notes (optional) |
      |---------|----------|------------------|

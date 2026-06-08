@@ -104,6 +104,85 @@ def test_split_sections_separates_news_and_caps_diversity():
     assert any(it["category"] == "ai" for it in sections["learning"])
 
 
+def test_score_items_excludes_recently_surfaced(tmp_path, monkeypatch):
+    embed.set_encoder(_stub_encoder())
+    monkeypatch.setattr(rank, "MIN_POOL", 1)  # don't let starvation relax the filter
+    conn = db.connect(tmp_path / "d.db")
+    db.init_schema(conn)
+    _seed_items(conn, [
+        {"id": "a", "url": "u/a", "source": "S1", "category": "ai",
+         "title": "LLM context windows", "age_hours": 5},
+        {"id": "b", "url": "u/b", "source": "S2", "category": "ai",
+         "title": "LLM training data", "age_hours": 5},
+    ])
+    # 'a' was surfaced as a candidate two days ago — within SEEN_EXCLUDE_DAYS.
+    conn.execute(
+        "INSERT INTO impressions (item_id, digest_date, section, position, score) "
+        "VALUES ('a', '2026-05-03', 'learning', 0, 1.0)"
+    )
+    conn.commit()
+
+    scored = rank.score_items(conn, ["LLM and AI systems"], today="2026-05-05")
+    ids = {s["id"] for s in scored}
+    assert "a" not in ids  # recently surfaced → dropped
+    assert "b" in ids
+
+
+def test_score_items_excludes_seen_this(tmp_path, monkeypatch):
+    embed.set_encoder(_stub_encoder())
+    monkeypatch.setattr(db, "REPO_ROOT", tmp_path)  # so load_manifests reads tmp daily/
+    (tmp_path / "daily").mkdir()
+    (tmp_path / "daily" / "digest-manifest-2026-05-04.json").write_text(
+        json.dumps({"date": "2026-05-04",
+                    "items": [{"section": "1. Foo", "item_id": "a"}]}),
+        encoding="utf-8",
+    )
+    conn = db.connect(tmp_path / "d.db")
+    db.init_schema(conn)
+    _seed_items(conn, [
+        {"id": "a", "url": "u/a", "source": "S1", "category": "ai",
+         "title": "LLM context windows", "age_hours": 5},
+        {"id": "b", "url": "u/b", "source": "S2", "category": "ai",
+         "title": "LLM training data", "age_hours": 5},
+    ])
+    # Worker-style click: impression on the human section title, reaction joined.
+    cur = conn.execute(
+        "INSERT INTO impressions (item_id, digest_date, section) "
+        "VALUES (NULL, '2026-05-04', '1. Foo')"
+    )
+    conn.execute(
+        "INSERT INTO reactions (impression_id, reaction, ts) VALUES (?, 'seen_this', ?)",
+        (cur.lastrowid, "2026-05-04T10:00:00Z"),
+    )
+    conn.commit()
+
+    scored = rank.score_items(conn, ["LLM and AI systems"], today="2026-05-05")
+    ids = {s["id"] for s in scored}
+    assert "a" not in ids  # explicitly marked "seen this" → permanently dropped
+    assert "b" in ids
+
+
+def test_split_sections_caps_per_interest():
+    # 10 high-scoring items on interest 0, 2 lower-scoring on interest 1, all
+    # distinct sources. Without the per-interest cap the learning block would be
+    # 8 interest-0 items; with it, the minority interest is represented.
+    items = [
+        {"id": f"m{i}", "url": f"u{i}", "source": f"S{i}", "category": "ai",
+         "title": f"m{i}", "summary": "", "published_at": "", "score": 1.0 - i * 0.01,
+         "sim": 1.0, "age_hours": 1, "interest_idx": 0, "reason": ""}
+        for i in range(10)
+    ] + [
+        {"id": f"n{i}", "url": f"v{i}", "source": f"T{i}", "category": "ai",
+         "title": f"n{i}", "summary": "", "published_at": "", "score": 0.5,
+         "sim": 0.5, "age_hours": 1, "interest_idx": 1, "reason": ""}
+        for i in range(2)
+    ]
+    learning = rank.split_sections(items)["learning"]
+    assert len(learning) == rank.LEARNING_K
+    # Both minority-interest items made it in despite lower scores.
+    assert sum(1 for it in learning if it["interest_idx"] == 1) == 2
+
+
 def test_run_writes_candidates_and_logs_impressions(tmp_path, monkeypatch):
     embed.set_encoder(_stub_encoder())
     monkeypatch.setattr(db, "REPO_ROOT", tmp_path)

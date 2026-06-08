@@ -104,6 +104,7 @@ Each section gets these:
 | 📈 Too basic | Raise the difficulty for this topic |
 | 📉 Too advanced | Lower the difficulty |
 | 👋 Not interested | Deprioritize this topic |
+| 🔁 Seen this | Drop this exact item — already saw it / repetitive |
 
 Plus a freeform feedback form for anything that doesn't fit the buttons.
 

@@ -105,6 +105,7 @@ function feedbackButtons(sectionTitle) {
     { key: "too_basic", label: "Too basic", emoji: "📈" },
     { key: "too_advanced", label: "Too advanced", emoji: "📉" },
     { key: "not_interested", label: "Not interested", emoji: "👋" },
+    { key: "seen_this", label: "Seen this", emoji: "🔁" },
   ];
 
   const links = reactions
