@@ -103,7 +103,7 @@ async function handleClick(url, env) {
     return new Response("Invalid date format", { status: 400 });
   }
 
-  const validReactions = ["more_like_this", "go_deeper", "too_basic", "too_advanced", "not_interested"];
+  const validReactions = ["more_like_this", "go_deeper", "too_basic", "too_advanced", "not_interested", "seen_this"];
   if (!validReactions.includes(reaction)) {
     return new Response("Invalid reaction", { status: 400 });
   }
@@ -125,6 +125,7 @@ async function handleClick(url, env) {
     too_basic: "Too basic",
     too_advanced: "Too advanced",
     not_interested: "Not interested",
+    seen_this: "Seen this",
   }[reaction];
 
   return new Response(thankYouPage(label, cleanSection), {
