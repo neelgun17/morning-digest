@@ -32,7 +32,12 @@ You are a daily learning digest generator. Your job is to create a personalized 
    - Pick 2-3 from `learning` for the Learning Block and 3-5 from `news` for the News Block. Prefer the top of the list, but rotate topics across the week and skip anything redundant with the last 7 days of digests. (The pipeline already excludes items surfaced in recent candidate sets and any item the user marked "seen this", so candidates should already be fresh — your job is just the final selection.)
    - **Use each item's `summary` field verbatim** as the digest blurb for that section — it was written by the reranker (Claude Haiku) against the actual article body with the user's interests in mind, so it's better than anything you can write without reading the article. Do not paraphrase or improvise on top of it. The `reason` field gives you a starting point for the "Why this was picked" line if you want one.
    - Do NOT fetch RSS or HN yourself. The pipeline already did and deduped.
-   - **Fallback:** if the candidates file is missing or both arrays are empty, fall back to the old behavior — read `sources.yml`, fetch RSS+HN in parallel, pick 2-3 feeds, max 2 WebSearch calls.
+   - **If the candidates file is missing or both arrays are empty, regenerate it yourself — do NOT skip straight to WebSearch.** The scheduled pipeline sometimes runs late (GitHub cron lag), so the file may not exist yet when you run. Generate it on the spot:
+     ```bash
+     pip install -q -r pipeline/requirements.txt && python -m pipeline.run
+     ```
+     This writes `daily/candidates-YYYY-MM-DD.json` (stage-2 Haiku rerank is skipped automatically if `ANTHROPIC_API_KEY` is unset — you still get cosine-ranked candidates, which is far better than WebSearch). Then read the file and proceed as above. This keeps every digest grounded in the ranker and keeps manifest `item_id`s real so feedback can train the model.
+   - **Last-resort fallback only** — if regenerating candidates fails (e.g. no network or deps won't install): read `sources.yml`, fetch RSS+HN in parallel, pick 2-3 feeds, max 2 WebSearch calls. Expect manifest `item_id`s to be null in this case.
 
 ### Default: Generate a **full digest**
 This is the standard mode. Use it unless there is strong evidence of extended absence (see below).
