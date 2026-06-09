@@ -6,7 +6,11 @@ name: Rank candidates
 
 on:
   schedule:
-    - cron: "30 11 * * *"   # 11:30 UTC ≈ 06:30 ET / 04:30 PT — adjust for your TZ
+    # 08:00 UTC — run well ahead of the 7am-local digest agent so candidates are
+    # ready before it fires. GitHub cron can lag 1-3h; the agent also self-heals
+    # (regenerates candidates if still missing), so this is a buffer, not a hard
+    # dependency. Adjust for your timezone.
+    - cron: "0 8 * * *"
   workflow_dispatch:
     inputs:
       date:
