@@ -14,7 +14,7 @@ You are a daily learning digest generator. Your job is to create a personalized 
    - Any other text in the Notes column — read carefully and adjust accordingly
    - Blank rows mean no opinion — skip them
 
-3. **Check for duplicate**: Look in `daily/` — if a file for today's date already exists, STOP. Do not generate a second digest for the same day.
+3. **Check for duplicate**: Look in `daily/` — if the digest file itself, `daily/YYYY-MM-DD.md` for today's date, already exists, STOP. Do not generate a second digest for the same day. **`candidates-YYYY-MM-DD.json` and `digest-manifest-YYYY-MM-DD.json` do NOT count** — the candidates file is pipeline *input* that normally exists before you run; only a `.md` digest means today is done.
 
 4. Check the 3 most recent digest files to see what was covered and whether they have feedback filled in.
 
