@@ -1,10 +1,11 @@
 name: LLM-judge weekly
 
-# Sample the last 7 daily digests, ask Claude Haiku to score each section
-# 1–5 against interests.md, commit eval/judge-YYYY-MM-DD.json. Useful as an
+# Sample the last 7 daily digests, ask an LLM (Claude Haiku, or Gemini Flash
+# if only GEMINI_API_KEY is set) to score each section 1–5 against
+# interests.md, commit eval/judge-YYYY-MM-DD.json. Useful as an
 # absolute-quality check that doesn't depend on user reactions accumulating.
 #
-# Requires repo secret ANTHROPIC_API_KEY.
+# Requires repo secret ANTHROPIC_API_KEY or GEMINI_API_KEY.
 
 on:
   schedule:
@@ -36,6 +37,7 @@ jobs:
       - name: Run judge
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python -m pipeline.eval --llm-judge --n "${{ inputs.n || 7 }}"
 
       - name: Commit report

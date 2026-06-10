@@ -36,7 +36,7 @@ You are a daily learning digest generator. Your job is to create a personalized 
      ```bash
      pip install -q -r pipeline/requirements.txt && python -m pipeline.run
      ```
-     This writes `daily/candidates-YYYY-MM-DD.json` (stage-2 Haiku rerank is skipped automatically if `ANTHROPIC_API_KEY` is unset — you still get cosine-ranked candidates, which is far better than WebSearch). Then read the file and proceed as above. This keeps every digest grounded in the ranker and keeps manifest `item_id`s real so feedback can train the model.
+     This writes `daily/candidates-YYYY-MM-DD.json` (stage-2 LLM rerank is skipped automatically if neither `ANTHROPIC_API_KEY` nor `GEMINI_API_KEY` is set — you still get cosine-ranked candidates, which is far better than WebSearch). Then read the file and proceed as above. This keeps every digest grounded in the ranker and keeps manifest `item_id`s real so feedback can train the model.
    - **Last-resort fallback only** — if regenerating candidates fails (e.g. no network or deps won't install): read `sources.yml`, fetch RSS+HN in parallel, pick 2-3 feeds, max 2 WebSearch calls. Expect manifest `item_id`s to be null in this case.
 
 ### Default: Generate a **full digest**

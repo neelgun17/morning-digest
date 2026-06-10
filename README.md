@@ -150,7 +150,7 @@ Source code is small and readable — `pipeline/` is ~1.5k lines of Python. Star
 | Cloudflare Workers | 100k req/day | ~5/day |
 | Claude Haiku reranker | Pay-as-you-go | ~$2/mo at default settings, optional |
 
-**Total: $0/mo without the Haiku reranker, ~$2/mo with it on.** Disable stage 2 by leaving `ANTHROPIC_API_KEY` unset.
+**Total: $0/mo without the Haiku reranker, ~$2/mo with it on.** Disable stage 2 by leaving `ANTHROPIC_API_KEY` unset. Prefer Gemini? Set `GEMINI_API_KEY` instead (Anthropic wins if both are set) — the reranker and judge use Gemini Flash, which has a free tier.
 
 ---
 
@@ -172,6 +172,8 @@ Your personal files (`interests.md`, `feedback-log.md`, `daily/`, `data/`) are g
 ## FAQ
 
 **Can I use it without the Haiku reranker?**  Yes — leave `ANTHROPIC_API_KEY` unset and stage 2 silently skips. You get cold-start cosine ranking with RSS summaries. Free.
+
+**Can I use Gemini instead of Claude for the reranker?**  Yes — set repo secret `GEMINI_API_KEY` (leave `ANTHROPIC_API_KEY` unset; Anthropic takes precedence when both exist). The stage-2 reranker and the weekly LLM-judge then use Gemini Flash (`gemini-2.5-flash`; override with a `GEMINI_MODEL` env var). Gemini's free tier covers the default ~30 calls/day.
 
 **Can I use a different agent model?**  Yes. Specify when scheduling (e.g. Opus for deeper analysis, Haiku for faster).
 

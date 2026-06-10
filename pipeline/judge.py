@@ -1,23 +1,23 @@
 """LLM-as-judge quality scoring for past digests.
 
-Picks the N most recent digests under daily/, sends each one to Claude Haiku
-along with interests.md, and asks for a 1–5 quality score per section plus
-an overall score. Results land in eval/judge-YYYY-MM-DD.json.
+Picks the N most recent digests under daily/, sends each one to an LLM
+(Claude Haiku by default, Gemini Flash if only GEMINI_API_KEY is set — see
+llm.py) along with interests.md, and asks for a 1–5 quality score per section
+plus an overall score. Results land in eval/judge-YYYY-MM-DD.json.
 
 The judge call is injectable (`set_judge_fn`) so tests don't need an API key.
 """
 from __future__ import annotations
 
 import json
-import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from . import db, rank
+from . import db, llm, rank
 
-JUDGE_MODEL = "claude-haiku-4-5"
+JUDGE_MODEL = llm.model_name()
 DEFAULT_N = 7
 
 JudgeFn = Callable[[str, str, str], dict]
@@ -33,18 +33,8 @@ def set_judge_fn(fn: JudgeFn) -> None:
 
 
 def _default_judge_fn() -> JudgeFn:
-    from anthropic import Anthropic
-
-    client = Anthropic()  # uses ANTHROPIC_API_KEY env var
-
     def call(system: str, user: str, model: str = JUDGE_MODEL) -> dict:
-        msg = client.messages.create(
-            model=model,
-            max_tokens=1024,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        text = "".join(block.text for block in msg.content if block.type == "text")
+        text = llm.complete(system, user, max_tokens=1024)
         return _parse_json_block(text)
 
     return call
@@ -151,7 +141,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("-n", type=int, default=DEFAULT_N)
     args = p.parse_args()
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise SystemExit("ANTHROPIC_API_KEY not set")
+    if llm.provider() is None:
+        raise SystemExit("no LLM key set (need ANTHROPIC_API_KEY or GEMINI_API_KEY)")
     summary = run(n=args.n)
     print(json.dumps({k: v for k, v in summary.items() if k != "digests"}, indent=2))

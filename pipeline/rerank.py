@@ -1,4 +1,5 @@
-"""Stage-2 rerank: send each top-30 item + interests to Claude Haiku, get
+"""Stage-2 rerank: send each top-30 item + interests to an LLM (Claude Haiku
+by default, Gemini Flash if only GEMINI_API_KEY is set — see llm.py), get
 back a {relevance: 1-10, summary: "..."} pair.
 
 The summary is personalized to the user's interests by virtue of the prompt,
@@ -13,10 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from typing import Awaitable, Callable
 
-RERANK_MODEL = "claude-haiku-4-5"
+from . import llm
+
+RERANK_MODEL = llm.model_name()
 BODY_CHARS_FOR_PROMPT = 4000
 PARALLEL = 8
 
@@ -30,21 +32,12 @@ def set_rerank_fn(fn: RerankFn) -> None:
 
 
 def is_available() -> bool:
-    return bool(_rerank_fn) or bool(os.environ.get("ANTHROPIC_API_KEY"))
+    return bool(_rerank_fn) or llm.provider() is not None
 
 
 def _default_rerank_fn() -> RerankFn:
-    from anthropic import AsyncAnthropic
-    client = AsyncAnthropic()
-
     async def call(system: str, user: str, model: str = RERANK_MODEL) -> dict:
-        msg = await client.messages.create(
-            model=model,
-            max_tokens=512,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        text = "".join(b.text for b in msg.content if b.type == "text")
+        text = await llm.acomplete(system, user, max_tokens=512)
         return _parse_json_block(text)
 
     return call
