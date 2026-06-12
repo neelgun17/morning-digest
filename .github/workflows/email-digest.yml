@@ -6,17 +6,35 @@ on:
     paths:
       - 'daily/*.md'
       - '!daily/sample-digest.md'
-    branches: [main]
+    # The scheduled agent may push the digest to a claude/* session branch
+    # instead of main (runner behavior since June 2026). Trigger on those too:
+    # the job below folds the branch into main, then sends the email. The
+    # fold-in uses GITHUB_TOKEN, whose pushes don't re-trigger workflows, so
+    # there's no double send.
+    branches: [main, 'claude/**']
 
 jobs:
   email:
     runs-on: ubuntu-latest
     # Only run if Resend is configured
     if: ${{ vars.EMAIL_ENABLED != 'false' }}
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
+
+      - name: Merge session branch into main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/merges" \
+            -f base=main -f head="${GITHUB_REF_NAME}" \
+            --jq '.sha' || {
+              echo "::warning::Could not auto-merge ${GITHUB_REF_NAME} into main — merge it manually, but the email below still goes out."
+            }
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Check secrets
         id: check
