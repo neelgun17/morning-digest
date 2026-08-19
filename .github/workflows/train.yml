@@ -9,8 +9,20 @@ on:
     - cron: "0 7 * * *"   # 07:00 UTC nightly
   workflow_dispatch:
 
+# Shared with pipeline.yml, eval.yml's refresh-baseline, and judge.yml — see
+# pipeline.yml for why. Serializes pushes to main instead of racing them.
+concurrency:
+  group: main-branch-writes
+  cancel-in-progress: false
+
 jobs:
   train:
+    # The public template carries these workflows for downstream users but must
+    # not run them itself: it has no interests.md and no API keys, and a
+    # scheduled run here would recommit candidate files into a repo that is
+    # meant to ship clean. Any downstream copy has a different
+    # github.repository, so this is always true for a real instance.
+    if: github.repository != 'neelgun17/morning-digest'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -47,6 +59,7 @@ jobs:
             echo "::notice::No model update (likely <50 labels yet)."
           else
             git commit -m "Retrain ranker $(date -u +%F)"
-            git pull --rebase origin "${{ github.ref_name }}" || true
-            git push
+
+            # Shared with the other workflows that write to main.
+            .github/scripts/push-with-retry.sh "${{ github.ref_name }}"
           fi

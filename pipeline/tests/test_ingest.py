@@ -62,6 +62,66 @@ def test_ingest_dedupes_repeated_events(tmp_path):
     assert counts["reactions"] == 1  # deduped via UNIQUE constraint
 
 
+def test_ingest_reads_shards_from_events_dir(tmp_path):
+    # No legacy events.jsonl at all — only monthly shards under data/events/.
+    events_path = tmp_path / "events.jsonl"
+    db_path = tmp_path / "digest.db"
+    events_dir = tmp_path / "events"
+    write_jsonl(events_dir / "2026-04.jsonl", [
+        {"ts": "2026-04-09T07:00:00Z", "kind": "click",
+         "date": "2026-04-09", "section": "1. X", "reaction": "more_like_this"},
+    ])
+    write_jsonl(events_dir / "2026-05.jsonl", [
+        {"ts": "2026-05-01T08:00:00Z", "kind": "open", "date": "2026-05-01"},
+    ])
+
+    counts = ingest_events.ingest(events_path, db_path)
+    assert counts["events"] == 2
+    assert counts["reactions"] == 2
+
+    conn = db.connect(db_path)
+    dates = {r[0] for r in conn.execute("SELECT digest_date FROM impressions").fetchall()}
+    assert dates == {"2026-04-09", "2026-05-01"}
+
+
+def test_ingest_merges_legacy_file_and_shards(tmp_path):
+    events_path = tmp_path / "events.jsonl"
+    db_path = tmp_path / "digest.db"
+    events_dir = tmp_path / "events"
+    write_jsonl(events_path, [
+        {"ts": "2026-03-01T07:00:00Z", "kind": "open", "date": "2026-03-01"},
+    ])
+    write_jsonl(events_dir / "2026-04.jsonl", [
+        {"ts": "2026-04-09T07:00:00Z", "kind": "click",
+         "date": "2026-04-09", "section": "1. X", "reaction": "more_like_this"},
+    ])
+
+    counts = ingest_events.ingest(events_path, db_path)
+    assert counts["events"] == 2
+
+    conn = db.connect(db_path)
+    dates = {r[0] for r in conn.execute("SELECT digest_date FROM impressions").fetchall()}
+    assert dates == {"2026-03-01", "2026-04-09"}
+
+
+def test_ingest_dedupes_across_legacy_and_shard(tmp_path):
+    # Same event present in both the legacy file and a shard (e.g. mid-migration
+    # overlap) must still land as exactly one impression/reaction, thanks to the
+    # UNIQUE constraints in db.py — this is the safety property migrate_events.py
+    # relies on.
+    events_path = tmp_path / "events.jsonl"
+    db_path = tmp_path / "digest.db"
+    events_dir = tmp_path / "events"
+    ev = {"ts": "2026-04-09T07:00:00Z", "kind": "click",
+          "date": "2026-04-09", "section": "1. X", "reaction": "more_like_this"}
+    write_jsonl(events_path, [ev])
+    write_jsonl(events_dir / "2026-04.jsonl", [ev])
+
+    counts = ingest_events.ingest(events_path, db_path)
+    assert counts["events"] == 2       # both lines read
+    assert counts["impressions"] == 1  # but deduped to one row
+    assert counts["reactions"] == 1
+
 def test_backfill_parses_and_merges(tmp_path):
     md = tmp_path / "feedback-log.md"
     md.write_text(

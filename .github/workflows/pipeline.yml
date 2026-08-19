@@ -17,8 +17,24 @@ on:
         description: "YYYY-MM-DD (defaults to today UTC)"
         required: false
 
+# Four workflows (this one, train.yml, eval.yml's refresh-baseline, judge.yml)
+# plus the Worker all write to main. The Worker's writes are single-file API
+# calls with their own SHA-conflict retry; these four are git push races with
+# each other. Same group across all of them serializes those pushes so they
+# queue instead of racing — cancel-in-progress: false because canceling a
+# mid-rebase job is worse than making the next one wait.
+concurrency:
+  group: main-branch-writes
+  cancel-in-progress: false
+
 jobs:
   rank:
+    # The public template carries these workflows for downstream users but must
+    # not run them itself: it has no interests.md and no API keys, and a
+    # scheduled run here would recommit candidate files into a repo that is
+    # meant to ship clean. Any downstream copy has a different
+    # github.repository, so this is always true for a real instance.
+    if: github.repository != 'neelgun17/morning-digest'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -56,13 +72,26 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add daily/candidates-*.json data/events.jsonl 2>/dev/null || true
+          # Stage each path separately: `git add a b c` aborts entirely — and
+          # stages NOTHING — if any one pathspec matches no files. The legacy
+          # data/events.jsonl is gone after migration, so the single-command
+          # form silently committed nothing at all.
+          for p in daily/candidates-*.json data/events.jsonl data/events data/health; do
+            git add "$p" 2>/dev/null || true
+          done
           if git diff --cached --quiet; then
             echo "::notice::No new candidates to commit."
           else
             DATE=$(date -u +%F)
             git commit -m "Rank candidates for ${DATE}"
-            # Pull-then-push to avoid losing worker writes that landed during the run
-            git pull --rebase origin "${{ github.ref_name }}" || true
-            git push
+
+            # Shared with the other workflows that write to main.
+            .github/scripts/push-with-retry.sh "${{ github.ref_name }}"
           fi
+
+      # Deliberately last: candidates are already written and committed above,
+      # so a degraded day still produces a digest even though this step then
+      # fails the run (and GitHub emails on red by default) — the whole point
+      # is to stop silent degradation, not to block the digest on it.
+      - name: Check pipeline health
+        run: python -m pipeline.health --check

@@ -34,7 +34,7 @@ Not for: someone who wants a polished consumer SaaS. This is a self-hosted syste
 ```
 sources.yml ──► fetch.py ──► embed.py ──► STAGE 1: coarse cosine recall over ~250 items
                                                             │
-                                                            ▼  top 30
+                                                            ▼  top 20
                                           STAGE 2: extract.py fetches article bodies,
                                           rerank.py asks Claude Haiku per item:
                                             {relevance 1-10, personalized summary}
@@ -128,11 +128,13 @@ System defaults to full digest. "Read" is detected via Resend's email-open webho
 
 **Ranking.** A scikit-learn logistic regression over 11 engineered features (cosine sim against interest paragraphs, log-age, smoothed source CTRs, category one-hot). Auto-falls back to cold-start cosine when fewer than 50 labels are available — so the system works on day one.
 
-**Two-stage retrieval.** Cheap stage 1 (MiniLM bi-encoder cosine, 250 items in seconds) → top 30 → expensive stage 2 (Claude Haiku per item, ~$0.07/day total). Bodies are cached in SQLite so re-runs hit the DB, not the network.
+**Two-stage retrieval.** Cheap stage 1 (MiniLM bi-encoder cosine, 250 items in seconds) → top 20 → expensive stage 2 (Claude Haiku per item, ~$0.07/day total). Bodies are cached in SQLite so re-runs hit the DB, not the network.
 
-**Training loop.** Cloudflare Worker writes structured events to `data/events.jsonl` (clicks, opens) → nightly workflow joins reactions to specific items via a per-day digest manifest → retrains the LogReg and force-commits `data/ranker.pkl`.
+**Training loop.** Cloudflare Worker writes structured events (clicks, opens) to a monthly shard under `data/events/` (e.g. `data/events/2026-08.jsonl`) → nightly workflow joins reactions to specific items via a per-day digest manifest → retrains the LogReg and force-commits `data/ranker.pkl`. Sharding by month keeps each file far under the GitHub Contents API's 1MB inline-read limit — a legacy flat `data/events.jsonl`, if present, is still read alongside the shards.
 
 **Evaluation.** Two tracks: (a) leave-one-day-out CV with macro nDCG@5, recall@5, and category/source entropy — gates PRs with a 10% regression tolerance in CI; (b) a weekly Claude Haiku LLM-judge that scores recent digests 1–5 against `interests.md`, independent of feedback volume.
+
+**Self-diagnosis.** Every pipeline run records whether stage 2 actually reranked (vs. skipped or failed) and whether the learning/news sections came out empty, persisted to `data/health/`. `python -m pipeline.health --check` exits 1 with the specific problems printed — wired as the last step of the daily pipeline workflow, so a degraded run (LLM erroring out, empty sections) fails loudly in GitHub instead of silently producing a thin digest that nobody notices.
 
 **Diversity.** Hard source cap (≤2 per source per section) guarantees at least 4 publications per section. Category split (learning vs news) guarantees topic diversity. Agent prompt rotates topics across the week.
 
@@ -156,16 +158,15 @@ Source code is small and readable — `pipeline/` is ~1.5k lines of Python. Star
 
 ## Pulling template updates
 
-A scheduled workflow pulls upstream improvements daily and auto-merges. Conflicts (rare) surface as a failed workflow run for you to resolve. To trigger manually: Actions tab → "Sync Template Updates" → Run workflow.
+There's no auto-sync workflow — a scheduled auto-merge existed early on and was removed (it broke more often than it helped). Instead, each digest email footer silently checks your local `VERSION` against the template's [latest release](https://github.com/neelgun17/morning-digest/releases) once a day (2s timeout, cached, never blocks sending) and shows a note when a newer one exists. Pulling it in is a manual step:
 
-Manual flow:
 ```bash
 git remote add template https://github.com/neelgun17/morning-digest.git
 git fetch template
 git merge template/main
 ```
 
-Your personal files (`interests.md`, `feedback-log.md`, `daily/`, `data/`) are gitignored in the template so they never conflict.
+Your personal files (`interests.md`, `feedback-log.md`, `daily/`, `data/`) are gitignored in the template so they never conflict. Set `MORNING_DIGEST_UPDATE_CHECK=0` to disable the footer check entirely.
 
 ---
 
@@ -189,7 +190,7 @@ Your personal files (`interests.md`, `feedback-log.md`, `daily/`, `data/`) are g
 
 ## Contributing
 
-This is a self-hosted template, not a service — improvements come back to the template, then flow downstream via the auto-sync workflow. Ideas welcome:
+This is a self-hosted template, not a service — improvements come back to the template, and you pull them downstream manually (see [Pulling template updates](#pulling-template-updates)). Ideas welcome:
 
 - New sources / source categories
 - Better ranking signals
@@ -200,4 +201,4 @@ Open an issue first if it's a substantial change.
 
 ---
 
-*Built by [@neelgun17](https://github.com/neelgun17). MIT licensed.* <!-- TODO: add LICENSE file -->
+*Built by [@neelgun17](https://github.com/neelgun17). [MIT licensed](LICENSE).*

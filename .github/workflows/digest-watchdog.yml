@@ -1,0 +1,53 @@
+name: Digest watchdog
+
+# The last silent-failure path in the system.
+#
+# pipeline.yml checks its own health at 08:00, but the Claude agent that
+# actually writes the digest runs at 12:00 — four hours later — so nothing in
+# that run can observe whether it did its job. And email-digest.yml is
+# *triggered by* the digest being pushed, so when the agent produces nothing
+# there's no push, no trigger, no run, and no signal at all: silence looks
+# exactly like "not yet". The June 2026 outage ran five days that way.
+#
+# This runs after the agent and asserts the digest actually landed on main and
+# is grounded in the ranker. A red run emails you by default — same channel as
+# the pipeline health check, no new service.
+
+on:
+  schedule:
+    # 14:00 UTC — 2h after the 12:00 agent. GitHub cron only ever fires late,
+    # never early, so the buffer can't be eaten from the wrong side. If you
+    # move the agent's schedule, move this with it.
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "YYYY-MM-DD to check (defaults to today UTC)"
+        required: false
+
+jobs:
+  watchdog:
+    # The public template carries these workflows for downstream users but must
+    # not run them itself: it has no interests.md and no API keys, and a
+    # scheduled run here would recommit candidate files into a repo that is
+    # meant to ship clean. Any downstream copy has a different
+    # github.repository, so this is always true for a real instance.
+    if: github.repository != 'neelgun17/morning-digest'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # No pip install: pipeline.health imports only the stdlib and pipeline.db,
+      # so this whole job runs in seconds. Keep it that way — a watchdog that's
+      # slow or flaky to start is a watchdog you'll end up disabling.
+      - name: Check today's digest landed and is grounded
+        run: |
+          if [ -n "${{ inputs.date }}" ]; then
+            python -m pipeline.health --check-digest --date "${{ inputs.date }}"
+          else
+            python -m pipeline.health --check-digest
+          fi

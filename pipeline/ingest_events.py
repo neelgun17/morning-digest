@@ -1,7 +1,10 @@
-"""Rebuild the SQLite event store from data/events.jsonl.
+"""Rebuild the SQLite event store from the monthly event shards.
 
-events.jsonl is the durable, human-diffable source of truth. Each line is one
-JSON object written by the Cloudflare worker:
+The event log is the durable, human-diffable source of truth. It lives as one
+file per month under data/events/ (e.g. data/events/2026-08.jsonl); a legacy
+flat data/events.jsonl from before sharding is still read alongside them, so a
+repo mid-migration loses nothing. Each line is one JSON object, written either
+by the Cloudflare worker (clicks, opens) or by rank.py (impressions):
 
     {"ts": "2026-04-09T07:00:00Z", "kind": "click",
      "date": "2026-04-09", "section": "1. LLM Memory",
@@ -12,6 +15,13 @@ This module rebuilds digest.db from that log. items rows are NOT created here
 (fetch.py owns those); impressions are stubbed with item_id=NULL when we have
 no link, so reactions can still be joined by (date, section). Once rank.py
 runs, it backfills item_id on the impression row it created.
+
+Reading the same event twice is harmless — the UNIQUE constraints in db.py
+make ingestion idempotent, which is exactly what lets the legacy file and the
+shards be read together during migration.
+
+The shard path rule itself lives in db.py (db.shard_path), since rank.py and
+health.py need it too.
 """
 from __future__ import annotations
 
@@ -29,24 +39,34 @@ def ingest(events_path: Path = db.EVENTS_PATH, db_path: Path = db.DB_PATH) -> di
     cur = conn.cursor()
     counts = {"events": 0, "impressions": 0, "reactions": 0, "skipped": 0}
 
-    if not events_path.exists():
+    # Shards live alongside the legacy file (events_path.parent/events/) so a
+    # caller pointing events_path at a tmp fixture gets isolated shards too.
+    events_dir = events_path.parent / "events"
+    paths = []
+    if events_path.exists():
+        paths.append(events_path)
+    if events_dir.exists():
+        paths.extend(sorted(events_dir.glob("*.jsonl")))
+
+    if not paths:
         conn.commit()
         conn.close()
         return counts
 
-    with events_path.open("r", encoding="utf-8") as f:
-        for line_num, line in enumerate(f, 1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                ev = json.loads(line)
-            except json.JSONDecodeError:
-                counts["skipped"] += 1
-                print(f"warn: bad JSON on line {line_num}", file=sys.stderr)
-                continue
-            counts["events"] += 1
-            _apply(cur, ev, counts)
+    for path in paths:
+        with path.open("r", encoding="utf-8") as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    ev = json.loads(line)
+                except json.JSONDecodeError:
+                    counts["skipped"] += 1
+                    print(f"warn: bad JSON in {path.name} line {line_num}", file=sys.stderr)
+                    continue
+                counts["events"] += 1
+                _apply(cur, ev, counts)
 
     conn.commit()
     conn.close()

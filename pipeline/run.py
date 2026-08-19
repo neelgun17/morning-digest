@@ -9,7 +9,7 @@ import argparse
 import json
 import sys
 
-from . import db, embed, fetch, ingest_events, rank
+from . import db, embed, fetch, health, ingest_events, rank
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,7 +18,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--skip-fetch", action="store_true", help="don't fetch new items")
     args = p.parse_args(argv)
 
-    print("→ ingest events.jsonl")
+    print("→ ingest events (legacy events.jsonl + data/events/ shards)")
     print(json.dumps(ingest_events.ingest(), indent=2))
 
     conn = db.connect()
@@ -33,7 +33,13 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(embed.run(conn), indent=2))
 
     print("→ rank")
-    print(json.dumps(rank.run(conn, today=args.date), indent=2))
+    rank_summary = rank.run(conn, today=args.date)
+    print(json.dumps(rank_summary, indent=2))
+
+    print("→ health")
+    health_record = health.record(rank_summary, today=args.date)
+    health.persist(health_record)
+    print(json.dumps(health_record, indent=2))
 
     conn.close()
     return 0

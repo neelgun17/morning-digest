@@ -10,10 +10,12 @@ feedback-log.md
 daily/*.md
 !daily/sample-digest.md
 
-# Pipeline artifacts — SQLite is rebuilt from events.jsonl on every run;
-# ranker.pkl is a binary blob retrained nightly. events.jsonl IS tracked in
-# downstream repos (worker writes it via the GitHub Contents API; pipeline
-# appends impression records).
+# Pipeline artifacts — SQLite is rebuilt from the event log on every run;
+# ranker.pkl is a binary blob retrained nightly (train.yml force-adds it past
+# this ignore). The event log IS tracked in downstream repos: the worker writes
+# monthly shards under data/events/ via the GitHub Contents API and the pipeline
+# appends impression records. Deliberately NOT ignored here — pipeline.yml
+# stages them with a plain `git add`, which stages nothing for an ignored path.
 data/digest.db
 data/ranker.pkl
 data/embeddings_cache/
@@ -30,3 +32,6 @@ __pycache__/
 
 # Update-check cache for the email footer (regenerated daily).
 .cache/
+
+# Local agent session state — never part of a publication.
+.claude/

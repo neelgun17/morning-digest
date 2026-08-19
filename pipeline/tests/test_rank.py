@@ -188,6 +188,7 @@ def test_run_writes_candidates_and_logs_impressions(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "data" / "digest.db")
     monkeypatch.setattr(db, "EVENTS_PATH", tmp_path / "data" / "events.jsonl")
+    monkeypatch.setattr(db, "EVENTS_DIR", tmp_path / "data" / "events")
 
     (tmp_path / "interests.md").write_text(
         "## Tech\n- LLM and AI systems\n- finance markets\n", encoding="utf-8",
@@ -211,7 +212,20 @@ def test_run_writes_candidates_and_logs_impressions(tmp_path, monkeypatch):
     assert out["learning"][0]["id"] == "a"
     assert out["news"][0]["id"] == "b"
 
-    log = (tmp_path / "data" / "events.jsonl").read_text().splitlines()
+    # Impressions land in the month shard, not a flat events.jsonl.
+    assert not (tmp_path / "data" / "events.jsonl").exists()
+    log = (tmp_path / "data" / "events" / "2026-05.jsonl").read_text().splitlines()
     kinds = [json.loads(l) for l in log]
     assert all(k["kind"] == "impression" for k in kinds)
     assert {k["item_id"] for k in kinds} == {"a", "b"}
+
+
+def test_stage2_pool_is_never_smaller_than_what_we_publish():
+    """STAGE1_TOP_K is the number of items sent to the (paid, rate-limited)
+    reranker. Dropping it below the publish ceiling guarantees some published
+    items were never reranked — they'd ship with raw RSS summaries. Any future
+    tuning for quota must keep this invariant."""
+    assert rank.STAGE1_TOP_K >= rank.LEARNING_K + rank.NEWS_K, (
+        f"STAGE1_TOP_K={rank.STAGE1_TOP_K} is below the publish ceiling "
+        f"{rank.LEARNING_K + rank.NEWS_K}"
+    )

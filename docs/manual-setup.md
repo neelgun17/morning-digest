@@ -43,9 +43,31 @@ npx wrangler secret put GITHUB_REPO     # paste username/repo-name
    - `FEEDBACK_URL` — the Worker URL
    - `FEEDBACK_SECRET` — `gh secret set FEEDBACK_SECRET --body-file /tmp/feedback-secret`
 
+### Open tracking (optional)
+
+The Worker records email opens at `POST /webhook/resend`. Unlike every other
+route, it is not authenticated by `FEEDBACK_SECRET` — Resend signs its webhooks
+and the Worker verifies that signature instead, which is why the route sits
+ahead of the token check.
+
+1. In the Resend dashboard, add a webhook pointing at
+   `https://<your-worker-url>/webhook/resend` for the `email.opened` event.
+2. Copy the signing secret Resend shows you (it starts with `whsec_`) and set it:
+
+```bash
+cd worker
+npx wrangler secret put RESEND_WEBHOOK_SECRET   # paste the whsec_... value
+```
+
+Without `RESEND_WEBHOOK_SECRET` set, the endpoint returns 500 and records
+nothing — it fails closed rather than accepting unverified events. Skip this
+whole section if you do not want open tracking; clicks and written feedback
+work without it.
+
 ## 4. Workflow permissions
 
-Required for the daily template auto-sync to push merged changes.
+Required for the pipeline, training, eval, and judge workflows to push their
+commits to `main`.
 
 ```bash
 gh api -X PUT "repos/OWNER/REPO/actions/permissions/workflow" \

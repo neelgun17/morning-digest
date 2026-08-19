@@ -1,17 +1,41 @@
-"""SQLite schema and connection helper for the digest pipeline.
+"""SQLite schema, on-disk paths, and connection helper for the digest pipeline.
 
-The DB is rebuilt from data/events.jsonl on every pipeline run, so this file
-owns the schema definition. items rows are populated by fetch.py; impressions
-are written by rank.py; reactions come from the worker via events.jsonl.
+The DB is rebuilt from the event log on every pipeline run, so this file owns
+both the schema definition and every path the pipeline reads or writes. items
+rows are populated by fetch.py; impressions are written by rank.py; reactions
+come from the worker via the monthly event shards.
 """
 from __future__ import annotations
 
+import re
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = REPO_ROOT / "data" / "digest.db"
-EVENTS_PATH = REPO_ROOT / "data" / "events.jsonl"
+EVENTS_PATH = REPO_ROOT / "data" / "events.jsonl"  # legacy, pre-sharding; still read
+EVENTS_DIR = REPO_ROOT / "data" / "events"         # monthly shards, e.g. 2026-08.jsonl
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def shard_path(date_str: str | None, shard_dir: Path = EVENTS_DIR,
+               now: datetime | None = None) -> Path:
+    """Month shard for an ISO date, e.g. '2026-08-18' -> shard_dir/2026-08.jsonl.
+
+    Lives here rather than in ingest_events because it's a path rule, not an
+    ingestion concern — rank.py, health.py (for data/health/) and the migration
+    script all need it, and all of them already import this module.
+
+    A malformed or missing date falls back to the current month (UTC) so a bad
+    event still lands somewhere findable instead of raising mid-pipeline.
+    """
+    if date_str and _DATE_RE.match(date_str):
+        month = date_str[:7]
+    else:
+        month = (now or datetime.now(timezone.utc)).strftime("%Y-%m")
+    return shard_dir / f"{month}.jsonl"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (

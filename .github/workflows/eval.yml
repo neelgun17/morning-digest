@@ -17,10 +17,13 @@ on:
     paths:
       - "pipeline/**"
       - "data/events.jsonl"
+      - "data/events/**"
 
 jobs:
   pr-check:
-    if: github.event_name == 'pull_request'
+    # Never in the template repo — it ships no event log, so there is
+    # nothing to score and the check would sit permanently red.
+    if: github.event_name == 'pull_request' && github.repository != 'neelgun17/morning-digest'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,10 +43,16 @@ jobs:
         run: python -m pipeline.eval --metrics --check
 
   refresh-baseline:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.repository != 'neelgun17/morning-digest'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    # Shared with pipeline.yml, train.yml, and judge.yml — see pipeline.yml
+    # for why. Job-level (not workflow-level) so pr-check, which never writes
+    # to main, isn't serialized against these.
+    concurrency:
+      group: main-branch-writes
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -69,6 +78,7 @@ jobs:
             echo "::notice::No baseline change."
           else
             git commit -m "Refresh ranker eval baseline $(date -u +%F)"
-            git pull --rebase origin main || true
-            git push
+
+            # Shared with the other workflows that write to main.
+            .github/scripts/push-with-retry.sh main
           fi

@@ -24,7 +24,12 @@ from . import db, embed, extract, features, rerank
 
 LEARNING_K = 8
 NEWS_K = 10
-STAGE1_TOP_K = 30                # oversample for stage 2 to re-order
+# How many items go to the (paid, rate-limited) stage-2 reranker. We publish at
+# most LEARNING_K + NEWS_K = 18, so 30 spent ~40% of a rate-limited quota on
+# items that could never appear in the digest. 20 keeps a little headroom for
+# stage 2 to reorder across the cut line without the waste. Never set this below
+# the publish ceiling — test_rank.py guards that invariant.
+STAGE1_TOP_K = 20
 RECENCY_HALF_LIFE_HOURS = 36.0
 NEWS_CATEGORIES = {"news", "finance"}
 
@@ -274,11 +279,12 @@ def split_sections(scored: list[dict]) -> dict:
     return {"learning": learning, "news": news}
 
 
-def log_impressions(events_path: Path, today: str, sections: dict) -> None:
-    """Append one impression event per candidate to events.jsonl."""
-    events_path.parent.mkdir(parents=True, exist_ok=True)
+def log_impressions(events_dir: Path, today: str, sections: dict) -> None:
+    """Append one impression event per candidate to the month's event shard."""
+    path = db.shard_path(today, events_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).isoformat()
-    with events_path.open("a", encoding="utf-8") as f:
+    with path.open("a", encoding="utf-8") as f:
         for section_name, items in sections.items():
             for pos, it in enumerate(items):
                 f.write(json.dumps({
@@ -329,7 +335,7 @@ def run(conn: sqlite3.Connection, today: str | None = None) -> dict:
     sections = split_sections(scored)
     out_path = db.REPO_ROOT / "daily" / f"candidates-{today}.json"
     write_candidates(out_path, today, sections, generator=_generator_tag(scored))
-    log_impressions(db.REPO_ROOT / "data" / "events.jsonl", today, sections)
+    log_impressions(db.EVENTS_DIR, today, sections)
     return {
         "interests": len(interests),
         "scored": len(scored),

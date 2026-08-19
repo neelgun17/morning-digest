@@ -17,8 +17,20 @@ on:
         required: false
         default: "7"
 
+# Shared with pipeline.yml, train.yml, and eval.yml's refresh-baseline — see
+# pipeline.yml for why. Serializes pushes to main instead of racing them.
+concurrency:
+  group: main-branch-writes
+  cancel-in-progress: false
+
 jobs:
   judge:
+    # The public template carries these workflows for downstream users but must
+    # not run them itself: it has no interests.md and no API keys, and a
+    # scheduled run here would recommit candidate files into a repo that is
+    # meant to ship clean. Any downstream copy has a different
+    # github.repository, so this is always true for a real instance.
+    if: github.repository != 'neelgun17/morning-digest'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -49,6 +61,7 @@ jobs:
             echo "::notice::No new judge report."
           else
             git commit -m "Add LLM-judge report $(date -u +%F)"
-            git pull --rebase origin "${{ github.ref_name }}" || true
-            git push
+
+            # Shared with the other workflows that write to main.
+            .github/scripts/push-with-retry.sh "${{ github.ref_name }}"
           fi
